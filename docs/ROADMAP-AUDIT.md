@@ -5,7 +5,7 @@ Décisions : licence MIT (hamza-bouda) ; Release GitHub publique autorisée (à 
 - [x] 1. npm audit (overrides)
 - [x] 2. CI GitHub Actions + cibles mac/linux (construit, non testé)
 - [x] 3. Sauvegarde / restauration globale
-- [~] 4. Génération d'images (Codex image_gen) : codé + 5 tests ; test réel bloqué tant que `codex login` n'est pas refait (jeton révoqué)
+- [x] 4. Génération d'images (Codex image_gen) : testée en réel, bascule activée et désactivée
 - [x] 5. Export HTML autonome + PDF
 - [~] 6. Mémoire validée par l'utilisateur
 - [x] 7. Bases de connaissances + recherche
@@ -15,5 +15,5 @@ Décisions : licence MIT (hamza-bouda) ; Release GitHub publique autorisée (à 
 - [x] 11. Design (barre de titre, squelettes, transitions, écran vide, vignettes)
 - [~] 12. Découpage des gros fichiers
 - [x] 13. Passe i18n anglais (non relue par un humain)
-- [ ] 14. Vérifs sur build installé
-- [ ] 15. Release GitHub
+- [x] 14. Vérifs sur build installé
+- [~] 15. Release GitHub

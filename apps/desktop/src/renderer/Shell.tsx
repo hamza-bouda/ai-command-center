@@ -39,7 +39,7 @@ function Sidebar({ collapsed, toggle }: { collapsed: boolean; toggle: () => void
     return <div key={id} className="mt-3"><button type="button" onClick={() => flip(id, isOpen)} aria-expanded={isOpen} data-open={isOpen} className="w-full flex items-center gap-1.5 px-2.5 h-7 text-2xs font-semibold text-muted uppercase tracking-wider hover:text-fg2 transition-colors"><ChevronRight size={12} className="chev" aria-hidden />{label}{!isOpen && hasActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent" />}</button>
       <div className="fold" data-open={isOpen || hasActive}><div className="space-y-0.5 pt-0.5">{items.map(item)}</div></div></div>; };
   return <aside aria-label="Navigation principale" className="shrink-0 bg-sidebar border-r border-line flex flex-col transition-[width] duration-200" style={{ width: collapsed ? 64 : 248 }}>
-    <div className={`h-14 flex items-center shrink-0 ${collapsed ? "justify-center" : "px-4 justify-between"}`}><Link to="/" className="flex items-center gap-2.5 min-w-0 group" aria-label="AI Command Center — accueil"><span className="w-7 h-7 grid place-items-center shrink-0 text-accent transition-transform duration-500 group-hover:rotate-90"><Asterisk size={24} strokeWidth={2.6} aria-hidden /></span>{!collapsed && <span className="font-semibold tracking-tight truncate">Command Center</span>}</Link>
+    <div className={`h-14 flex items-center shrink-0 drag ${collapsed ? "justify-center" : "px-4 justify-between"}`}><Link to="/" className="flex items-center gap-2.5 min-w-0 group" aria-label="AI Command Center — accueil"><span className="w-7 h-7 grid place-items-center shrink-0 text-accent transition-transform duration-500 group-hover:rotate-90"><Asterisk size={24} strokeWidth={2.6} aria-hidden /></span>{!collapsed && <span className="font-semibold tracking-tight truncate">Command Center</span>}</Link>
       {!collapsed && <button className="btn btn-ghost btn-icon" onClick={toggle} aria-label="Réduire la barre latérale"><PanelLeftClose size={16} /></button>}</div>
     {collapsed && <button className="btn btn-ghost btn-icon mx-auto mb-1" onClick={toggle} aria-label="Déployer la barre latérale"><PanelLeftOpen size={16} /></button>}
     <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3">
@@ -68,7 +68,7 @@ function Breadcrumbs() {
 function Topbar({ onPalette, panelOpen, togglePanel }: { onPalette: () => void; panelOpen: boolean; togglePanel: () => void }) {
   const t = useT(); const nav = useNavigate(); const { data: d } = useData<any>("dashboard", [], { events: /execution|notification/ }); const isMac = navigator.platform.includes("Mac");
   const active = (d?.counts.running ?? 0);
-  return <header className="h-14 shrink-0 border-b border-line flex items-center gap-3 px-5 bg-bg/80 backdrop-blur">
+  return <header className="h-14 shrink-0 border-b border-line flex items-center gap-3 px-5 bg-bg/80 backdrop-blur drag app-header">
     <Breadcrumbs />
     <button onClick={onPalette} className="ml-auto hidden md:flex items-center gap-2 h-9 w-[320px] px-3 rounded-lg bg-panel border border-line text-muted hover:border-line-strong text-[13px]" aria-label="Ouvrir la recherche globale"><Search size={14} /><span className="flex-1 text-left">{t("common.search")}</span><span className="kbd">{isMac ? "⌘" : "Ctrl"} K</span></button>
     <button onClick={onPalette} className="md:hidden btn btn-ghost btn-icon ml-auto" aria-label="Recherche"><Search size={16} /></button>

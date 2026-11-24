@@ -80,8 +80,8 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
       } finally { if (wasVisible) { w.show(); w.focus(); } }
     },
     // ---- Lanceur global, icône de notification, arrière-plan ----
-    "app.setTheme": (mode: unknown) => { const m = mode === "light" || mode === "dark" ? mode : "system"; c.settings.set("ui.theme", m); nativeTheme.themeSource = m; for (const w of BrowserWindow.getAllWindows()) w.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#262624" : "#faf9f5"); return m; },
-    "app.setZoom": (f: unknown) => { const z = Math.min(1.4, Math.max(0.8, Number(f) || 1)); c.settings.set("ui.zoom", z); win?.webContents.setZoomFactor(z); return z; },
+    "app.setTheme": (mode: unknown) => { const m = mode === "light" || mode === "dark" ? mode : "system"; c.settings.set("ui.theme", m); nativeTheme.themeSource = m; for (const w of BrowserWindow.getAllWindows()) w.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#262624" : "#faf9f5"); refreshOverlay(); return m; },
+    "app.setZoom": (f: unknown) => { const z = Math.min(1.4, Math.max(0.8, Number(f) || 1)); c.settings.set("ui.zoom", z); win?.webContents.setZoomFactor(z); refreshOverlay(); return z; },
     "launcher.info": () => ({ trayOk, packaged: app.isPackaged, shortcut: currentShortcut, shortcutOk, defaultShortcut: DEFAULT_SHORTCUT, keepRunning: !!c.settings.get("app.keepRunning", false), autostart: !!c.settings.get("app.autostart", false) }),
     "app.setShortcut": (accel: unknown) => { const a = String(accel ?? "").trim(); const r = registerShortcut(a); if (r.ok) c.settings.set("app.shortcut", a); return { ...r, shortcut: currentShortcut }; },
     "app.setKeepRunning": (v: unknown) => { c.settings.set("app.keepRunning", !!v); return true; },
@@ -207,9 +207,12 @@ function createTray(): boolean {
   } catch { return false; /* icône indisponible : l'application reste utilisable, mais le retour depuis l'arrière-plan passe par le raccourci du Bureau */ }
 }
 
+/** Barre de titre intégrée à l'application (boutons de fenêtre aux couleurs du thème). Hauteur = celle de l'en-tête (56 px × zoom). */
+const overlayOpts = () => { const dark = nativeTheme.shouldUseDarkColors; const z = Number(core?.settings.get("ui.zoom", 1)) || 1; return { color: dark ? "#262624" : "#faf9f5", symbolColor: dark ? "#e8e6e1" : "#3d3d3a", height: Math.round(56 * z) }; };
+const refreshOverlay = () => { if (process.platform === "darwin") return; for (const w of BrowserWindow.getAllWindows()) { if (w === quick) continue; try { w.setTitleBarOverlay(overlayOpts()); } catch { /* fenêtre sans barre intégrée */ } } };
 async function createWindow() {
   const b = initialBounds(); const wa = screen.getPrimaryDisplay().workArea;
-  win = new BrowserWindow({ ...b, minWidth: Math.min(900, wa.width), minHeight: Math.min(600, wa.height), show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? "#262624" : "#faf9f5", title: "AI Command Center", autoHideMenuBar: true, icon: join(__dirname, "../../build/icon.png"),
+  win = new BrowserWindow({ ...b, minWidth: Math.min(900, wa.width), minHeight: Math.min(600, wa.height), show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? "#262624" : "#faf9f5", title: "AI Command Center", autoHideMenuBar: true, icon: join(__dirname, "../../build/icon.png"), ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const } : { titleBarStyle: "hidden" as const, titleBarOverlay: overlayOpts() }),
     webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   if (b.maximized) win.maximize(); win.once("ready-to-show", () => { if (!(startHidden && core?.settings.get("app.keepRunning", false))) win?.show(); }); trackWinState(win);
   // Fermer la fenêtre : mise en arrière-plan (icône près de l'horloge) si activé, sinon l'application se ferme. « Quitter » du menu de l'icône quitte vraiment.
@@ -223,6 +226,7 @@ async function createWindow() {
 
 if (process.platform === "win32") app.setAppUserModelId("local.ai-command-center"); // même identifiant que le raccourci de l'installateur : épinglage et regroupement corrects dans la barre des tâches
 app.whenReady().then(async () => {
+  nativeTheme.on("updated", () => refreshOverlay());
   if (!gotLock) { app.quit(); return; }
   protocol.handle("acc-image", async (req) => { try { const u = new URL(req.url); const p = imagePath(decodeURIComponent(u.pathname.replace(/^\//, ""))); const { readFileSync } = await import("node:fs"); return new Response(readFileSync(p), { headers: { "content-type": "image/png", "x-content-type-options": "nosniff" } }); } catch { return new Response("Introuvable", { status: 404 }); } });
   protocol.handle("acc-artifact", (req) => { const html = artifacts.get(new URL(req.url).pathname.replace(/^\//, "")); if (html === undefined) return new Response("Introuvable", { status: 404 }); return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": ARTIFACT_CSP, "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" } }); });

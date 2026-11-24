@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Asterisk, ImagePlus, Paperclip, Send, Lightbulb, PenLine, Code2, GraduationCap, MessageSquare } from "lucide-react";
+import { Asterisk, ImagePlus, Paperclip, Send, Lightbulb, PenLine, Code2, GraduationCap, MessageSquare, ListChecks, BarChart3, GitBranch, Sparkles } from "lucide-react";
 import { api } from "../api"; import { useData } from "../hooks"; import { toast } from "../overlay";
 import { ErrorState } from "../ui";
 import { AIModelConfiguration, useDefaultConfig, AIConfig, Mode, PROVIDER_LABEL } from "../components/AIModelConfiguration"; import { ConversationList, ConversationView } from "../components/Conversations"; import { Composer, type Attach } from "../components/Composer"; import { useAttachFlow } from "../components/attachFlow"; import { useImageInput } from "../components/imageInput"; import { LimitBanner } from "../components/LimitBanner";
 
-const SUGGESTIONS: [any, string, string][] = [[GraduationCap, "Expliquer un concept", "Explique-moi simplement le fonctionnement de "], [Lightbulb, "Analyser une idée", "Aide-moi à analyser cette idée, avec ses forces et ses risques : "], [PenLine, "Rédiger un texte", "Rédige un texte clair et soigné sur "], [Code2, "Comprendre du code", "Explique ce que fait ce code, étape par étape :\n\n"]];
+const SUGGESTIONS: [any, string, string][] = [[GraduationCap, "Expliquer un concept", "Explique-moi simplement le fonctionnement de "], [Lightbulb, "Analyser une idée", "Aide-moi à analyser cette idée, avec ses forces et ses risques : "], [PenLine, "Rédiger un texte", "Rédige un texte clair et soigné sur "], [Code2, "Comprendre du code", "Explique ce que fait ce code, étape par étape :\n\n"], [ListChecks, "Créer un QCM cliquable", "Crée un QCM de 5 questions pour réviser "], [BarChart3, "Comparer en graphique", "Compare sous forme de graphique, avec des chiffres réalistes : "], [GitBranch, "Expliquer avec un schéma", "Explique avec un diagramme : "], [Sparkles, "Créer une page interactive", "Crée une page HTML interactive : "]];
 
 /** Composer d'un nouvel échange : crée la conversation au premier envoi (aucun projet requis en Chat). */
 export function NewConversationComposer({ mode, projectId, title, subtitle, suggestions = false, onCreated, disabledReason, placeholder }: { mode: Mode; projectId?: string; title: string; subtitle?: string; suggestions?: boolean; onCreated: (id: string) => void; disabledReason?: string; placeholder?: string }) {

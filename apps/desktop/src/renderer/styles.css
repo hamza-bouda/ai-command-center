@@ -134,3 +134,8 @@ h1, .font-display { font-family: "Source Serif 4 Variable", "Iowan Old Style", G
 .hljs-title, .hljs-title.class_, .hljs-title.function_, .hljs-section { color: var(--hl-title); }
 .hljs-built_in, .hljs-symbol, .hljs-bullet, .hljs-params { color: var(--hl-builtin); }
 .hljs-addition { color: var(--hl-add); } .hljs-deletion { color: var(--hl-del); } .hljs-emphasis { font-style: italic; } .hljs-strong { font-weight: 700; }
+
+/* Barre de titre intégrée : l'en-tête sert de zone de déplacement, ses commandes restent cliquables ; les boutons de fenêtre (à droite) gardent leur place. */
+.drag { -webkit-app-region: drag; }
+.drag button, .drag a, .drag input, .drag select, .drag textarea, .drag [role="button"], .drag [role="tab"], .drag label, .no-drag { -webkit-app-region: no-drag; }
+.app-header { padding-right: max(1.25rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))); }

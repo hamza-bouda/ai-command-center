@@ -67,6 +67,7 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
     "ext.testSaved": async (id: string) => { const e = (c.db.prepare("SELECT * FROM extensions WHERE id=? AND kind='mcp'").get(id) as any); if (!e) throw new Error("Serveur introuvable"); return c.extensions.test(JSON.parse(e.config)); },
     "ext.importSkillPath": (p: string, modes?: any[]) => { if (!c.system.skills().some((s: any) => s.path === p)) throw new Error("Skill non détectée dans les dossiers connus."); return c.extensions.importSkill(p, modes); },
     "artifact.put": (html: unknown) => { const s = String(html ?? ""); if (s.length > 1_000_000) throw new Error("Aperçu trop volumineux (1 Mo maximum)."); const id = randomUUID(); artifacts.set(id, s); if (artifacts.size > 100) artifacts.delete(artifacts.keys().next().value as string); return id; },
+    "conv.exportRich": (id: unknown, fmt: unknown, testPath?: unknown) => exportConversation(String(id), fmt === "pdf" ? "pdf" : "html", typeof testPath === "string" ? testPath : undefined),
     "image.save": async (ref: unknown) => { const p = imagePath(String(ref ?? "")); const r = await dialog.showSaveDialog(win!, { defaultPath: "image.png", filters: [{ name: "Image PNG", extensions: ["png"] }] }); if (r.canceled || !r.filePath) return null; (await import("node:fs")).copyFileSync(p, r.filePath); return r.filePath; },
     "file.saveText": async (name: unknown, content: unknown) => { const r = await dialog.showSaveDialog(win!, { defaultPath: String(name ?? "fichier.txt") }); if (r.canceled || !r.filePath) return null; (await import("node:fs")).writeFileSync(r.filePath, String(content ?? ""), "utf8"); return r.filePath; },
     // Capture de l'écran où se trouve la fenêtre, après l'avoir masquée (sinon l'application se capturerait elle-même).
@@ -155,6 +156,33 @@ async function ensureQuick(): Promise<BrowserWindow> {
   quick = new BrowserWindow({ width: 700, height: 200, show: false, frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, hasShadow: false, title: "Lanceur rapide", webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   guard(quick); quick.on("blur", () => { if (quick && !quick.webContents.isDevToolsOpened()) quick.hide(); }); quick.on("closed", () => { quick = undefined; });
   await loadRenderer(quick, "/quick"); return quick;
+}
+/** Export mis en page d'une conversation (HTML autonome ou PDF) : rendu par l'application elle-même dans une fenêtre cachée, graphiques et diagrammes compris. */
+const SERIALIZE = `(() => { const css = [...document.styleSheets].map((s) => { try { return [...s.cssRules].map((r) => r.cssText).join(String.fromCharCode(10)); } catch { return ""; } }).join(String.fromCharCode(10));
+  const clone = document.getElementById("root").cloneNode(true);
+  clone.querySelectorAll("iframe").forEach((f) => { const p = document.createElement("p"); p.textContent = "[Aperçu HTML interactif non inclus dans l'export]"; p.setAttribute("style", "font-size:12px;color:#777;border:1px dashed #aaa;padding:12px;border-radius:12px"); f.replaceWith(p); });
+  clone.querySelectorAll("button[aria-label]").forEach((b) => { if (/copier|agrandir|enregistrer|télécharger|plein écran|exporter|réinitialiser/i.test(b.getAttribute("aria-label"))) b.remove(); });
+  return JSON.stringify({ css, body: clone.innerHTML, title: document.querySelector("h1")?.textContent || "Conversation" }); })()`;
+const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+async function exportConversation(id: string, fmt: "html" | "pdf", testPath?: string): Promise<string | null> {
+  const conv = core.conversations.get(id); if (!conv) throw new Error("Conversation introuvable");
+  const safe = String(conv.title).replace(/[^\p{L}\p{N} _().-]/gu, " ").replace(/ +/g, " ").trim().slice(0, 60) || "conversation";
+  const r = testPath && process.env.ACC_E2E === "1" ? { canceled: false, filePath: testPath } : await dialog.showSaveDialog(win!, { defaultPath: `${safe}.${fmt}`, filters: [fmt === "pdf" ? { name: "PDF", extensions: ["pdf"] } : { name: "Page web", extensions: ["html"] }] });
+  if (r.canceled || !r.filePath) return null;
+  const ew = new BrowserWindow({ show: false, width: 900, height: 1200, webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, backgroundThrottling: false } });
+  try {
+    await loadRenderer(ew, `/export/${id}`);
+    const t0 = Date.now(); while (Date.now() - t0 < 25000) { if (await ew.webContents.executeJavaScript('document.body.dataset.ready === "1"')) break; await new Promise((res) => setTimeout(res, 200)); }
+    const fs = await import("node:fs");
+    if (fmt === "pdf") { fs.writeFileSync(r.filePath, await ew.webContents.printToPDF({ printBackground: true, pageSize: "A4", margins: { marginType: "default" } })); return r.filePath; }
+    const d = JSON.parse(await ew.webContents.executeJavaScript(SERIALIZE)) as { css: string; body: string; title: string };
+    const inline = (txt: string) => txt
+      .replace(/acc-image:\/\/f\/([A-Za-z0-9_\-\/]+\.png)/g, (m, ref) => { try { return "data:image/png;base64," + fs.readFileSync(imagePath(ref)).toString("base64"); } catch { return m; } });
+    const root = join(__dirname, "../renderer");
+    const css = inline(d.css).replace(/url\((['"]?)(?:\.\.?\/|\/)?(assets\/[A-Za-z0-9_.\-]+\.(woff2|woff))\1\)/g, (m, _q, rel, ext) => { try { const p = join(root, rel); if (!p.startsWith(root + sep)) return m; return `url(data:font/${ext};base64,${fs.readFileSync(p).toString("base64")})`; } catch { return m; } });
+    const html = `<!doctype html><html lang="fr" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"><title>${escHtml(d.title)}</title><style>${css}</style></head><body><div id="root">${inline(d.body)}</div></body></html>`;
+    fs.writeFileSync(r.filePath, html, "utf8"); return r.filePath;
+  } finally { if (!ew.isDestroyed()) ew.destroy(); }
 }
 function hideQuick() { if (quick && !quick.isDestroyed()) quick.hide(); }
 async function toggleQuick() {

@@ -9,10 +9,11 @@ const Quality = lazy(() => import("./pages/Quality")); const Automations = lazy(
 const Terminal = lazy(() => import("./pages/Terminal")); const Quotas = lazy(() => import("./pages/Quotas")); const Settings = lazy(() => import("./pages/Settings")); const Orchestrator = lazy(() => import("./pages/Orchestrator"));
 const Misc = lazy(() => import("./pages/Misc").then((m) => ({ default: m.Notifications }))); const Git = lazy(() => import("./pages/Misc").then((m) => ({ default: m.Git })));
 const Activity = lazy(() => import("./pages/Misc").then((m) => ({ default: m.ActivityPage })));
-const Quick = lazy(() => import("./pages/Quick")); const Onboarding = lazy(() => import("./components/Onboarding").then((m) => ({ default: m.Onboarding }))); const Library = lazy(() => import("./pages/Library"));
+const ExportView = lazy(() => import("./pages/Export")); const Quick = lazy(() => import("./pages/Quick")); const Onboarding = lazy(() => import("./components/Onboarding").then((m) => ({ default: m.Onboarding }))); const Library = lazy(() => import("./pages/Library"));
 export default function App() {
   // Le lanceur rapide est une fenêtre à part : pas de barre latérale ni de barre du haut.
   if (window.location.hash.startsWith("#/quick")) return <Suspense fallback={null}><Quick /></Suspense>;
+  if (window.location.hash.startsWith("#/export/")) return <Suspense fallback={null}><ExportView id={decodeURIComponent(window.location.hash.slice("#/export/".length))} /></Suspense>;
   return <MainApp />;
 }
 function MainApp() {

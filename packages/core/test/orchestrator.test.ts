@@ -83,7 +83,7 @@ describe("Orchestrator", () => {
     await until(() => c.orchestrator.pendingGates().length === 1); expect(st(c, id)).toBe("running");
     await c.orchestrator.resolveGate(c.orchestrator.pendingGates()[0].id, true); await until(() => st(c, id) === "completed");
     const o = c.orchestrator.get(id); expect(o.report).toMatch(/Rapport d'orchestration/); expect(o.report).toMatch(/Backend/);
-    const hs = c.orchestrator.handoffs(id); expect(hs).toHaveLength(2); expect(hs[0].payload.decisions.length).toBeGreaterThan(0); expect(hs[0].payload.structured).toBe(true);
+    const hs = c.orchestrator.handoffs(id); expect(hs).toHaveLength(2); expect(hs[0].payload.decisions.length).toBeGreaterThan(0); expect(hs[0].payload.structured).toBe(true); expect(hs.every((h: any) => h.chars > 0)).toBe(true);
     expect(c.analytics.totals({}).total).toBeGreaterThan(0); // consommation des étapes + planification tracée
     // chaque agent garde son propre historique : une exécution distincte par tâche
     const exs = all<any>(c.db, "SELECT DISTINCT task_id FROM agent_executions WHERE task_id IS NOT NULL"); expect(exs).toHaveLength(3);

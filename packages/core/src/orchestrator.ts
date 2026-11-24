@@ -169,7 +169,7 @@ ${out}`.slice(0, 22000), now(), code === 0 ? "done" : "blocked", t.id);
   private async launch(o: any, t: any, deps: any[]) {
     const provider = await this.pickProvider(o, t); const agentId = this.ensureAgent(o.project_id, t.role ?? "fullstack", provider);
     const blocks: string[] = [];
-    for (const d of deps) { const h = this.buildHandoff(o, d, t); if (!h) continue; run(this.db, "INSERT INTO handoffs VALUES (?,?,?,?,?,?,?,?)", uid(), o.id, d.id, t.id, h.execId, JSON.stringify(h.payload), 0, now()); blocks.push(renderHandoff(h.payload)); this.ev(o.id, "handoff", `${d.title} → ${t.title}`, t.id); }
+    for (const d of deps) { const h = this.buildHandoff(o, d, t); if (!h) continue; const block = renderHandoff(h.payload); run(this.db, "INSERT INTO handoffs VALUES (?,?,?,?,?,?,?,?)", uid(), o.id, d.id, t.id, h.execId, JSON.stringify(h.payload), block.length, now()); blocks.push(block); this.ev(o.id, "handoff", `${d.title} → ${t.title}`, t.id); }
     const prompt = [`[Objectif global] ${o.goal}`, `[Ta tâche] ${t.title}${t.description ? `\n${t.description}` : ""}`, blocks.length ? `[Contexte transmis par les étapes précédentes]\n${blocks.join("\n\n")}` : "", `[Consignes] Réalise uniquement ta tâche. ${HANDOFF_INSTRUCTION}`].filter(Boolean).join("\n\n");
     const write = isWriteRole(t.role ?? "");
     const eid = this.exec.enqueue({ projectId: o.project_id, agentId, taskId: t.id, provider, prompt, priority: 5, useWorktree: !!o.use_worktrees && write });

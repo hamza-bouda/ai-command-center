@@ -19,3 +19,10 @@ describe("éditeur graphique : fonctions pures", () => {
     const pos = autoLayout([n("a"), n("b", ["a"]), n("c", ["a"]), n("d", ["b", "c"])]); expect(pos.get("a")!.x).toBe(0); expect(pos.get("b")!.x).toBe(pos.get("c")!.x); expect(pos.get("b")!.y).not.toBe(pos.get("c")!.y); expect(pos.get("d")!.x).toBeGreaterThan(pos.get("b")!.x);
   });
 });
+
+describe("disposition verticale", () => {
+  it("TB : profondeur vers le bas, branches côte à côte", () => {
+    const pos = autoLayout([n("a"), n("b", ["a"]), n("c", ["a"]), n("d", ["b", "c"])], 230, 130, "TB");
+    expect(pos.get("a")!.y).toBe(0); expect(pos.get("b")!.y).toBe(pos.get("c")!.y); expect(pos.get("b")!.x).not.toBe(pos.get("c")!.x); expect(pos.get("d")!.y).toBeGreaterThan(pos.get("b")!.y);
+  });
+});

@@ -24,8 +24,8 @@ export const removeNode = (nodes: SNode[], key: string): SNode[] => nodes.filter
 /** Nœuds sans prédécesseur : ceux que l'orchestrateur lance en premier. */
 export const roots = (nodes: SNode[]): string[] => nodes.filter((n) => n.dependsOn.length === 0).map((n) => n.key);
 /** Positions manquantes : disposition en colonnes par profondeur (gauche → droite). */
-export function autoLayout(nodes: SNode[], dx = 290, dy = 150): Map<string, { x: number; y: number }> {
+export function autoLayout(nodes: SNode[], dx = 290, dy = 150, dir: "LR" | "TB" = "LR"): Map<string, { x: number; y: number }> {
   const depth = new Map<string, number>(); const by = new Map(nodes.map((n) => [n.key, n])); const d = (k: string, guard = 0): number => { if (depth.has(k)) return depth.get(k)!; if (guard > 30) return 0; const n = by.get(k); const v = !n || !n.dependsOn.length ? 0 : 1 + Math.max(...n.dependsOn.map((p) => d(p, guard + 1))); depth.set(k, v); return v; };
   const cols = new Map<number, string[]>(); for (const n of nodes) { const v = d(n.key); cols.set(v, [...(cols.get(v) ?? []), n.key]); }
-  const out = new Map<string, { x: number; y: number }>(); for (const [c, ks] of cols) ks.forEach((k, i) => out.set(k, { x: c * dx, y: (i - (ks.length - 1) / 2) * dy })); return out;
+  const out = new Map<string, { x: number; y: number }>(); for (const [c, ks] of cols) ks.forEach((k, i) => { const along = c * (dir === "LR" ? dx : dy), across = (i - (ks.length - 1) / 2) * (dir === "LR" ? dy : dx); out.set(k, dir === "LR" ? { x: along, y: across } : { x: across, y: along }); }); return out;
 }

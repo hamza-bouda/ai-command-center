@@ -45,7 +45,7 @@ export function createCore(opts: { dataDir: string; dbFile?: string; adapters?: 
   };
   const exec = new ExecutionManager(db, bus, adapters, (p) => providerStatus(p), opts.dataDir);
   const recovered = exec.reconcile();
-  const orchestrator = new Orchestrator(db, bus, exec, (p) => providerStatus(p)); orchestrator.reconcile();
+  const orchestrator = new Orchestrator(db, bus, exec, (p) => providerStatus(p)); orchestrator.reconcile(); orchestrator.backfillHandoffSizes();
   const catalog = new AICatalog(db, adapters, (p) => providerStatus(p));
   let worksRef: Works | undefined;
   const extensions = new Extensions(db); const profile = new Profile(db, (k, v) => setSetting(db, k, v)); const knowledge = new Knowledge(db); const userMemory = new UserMemory(db, (k, v) => setSetting(db, k, v)); const library = new Library(db); const converter = new DocConverter(opts.dataDir, bus);

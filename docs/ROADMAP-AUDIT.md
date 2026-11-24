@@ -16,4 +16,4 @@ Décisions : licence MIT (hamza-bouda) ; Release GitHub publique autorisée (à 
 - [~] 12. Découpage des gros fichiers
 - [x] 13. Passe i18n anglais (non relue par un humain)
 - [x] 14. Vérifs sur build installé
-- [~] 15. Release GitHub
+- [x] 15. Release GitHub

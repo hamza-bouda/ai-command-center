@@ -139,3 +139,22 @@ h1, .font-display { font-family: "Source Serif 4 Variable", "Iowan Old Style", G
 .drag { -webkit-app-region: drag; }
 .drag button, .drag a, .drag input, .drag select, .drag textarea, .drag [role="button"], .drag [role="tab"], .drag label, .no-drag { -webkit-app-region: no-drag; }
 .app-header { padding-right: max(1.25rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))); }
+
+/* Réglage d'effort en curseur : piste remplie jusqu'au cran choisi, poignée à faire glisser (clavier : flèches). */
+.effort-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; cursor: pointer; --pct: 0%; }
+.effort-slider:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 999px; }
+.effort-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: linear-gradient(90deg, var(--accent) var(--pct), var(--surface-hover) var(--pct)); }
+.effort-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -7px; border-radius: 50%; background: var(--accent-fg, #fff); border: 3px solid var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: transform .12s ease, box-shadow .12s ease; }
+.effort-slider:hover::-webkit-slider-thumb { transform: scale(1.12); }
+.effort-slider:active::-webkit-slider-thumb { transform: scale(1.2); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); }
+.effort-slider:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Atelier graphique (reactflow) aux couleurs du thème */
+.react-flow { background: var(--background); }
+.react-flow__controls { box-shadow: var(--shadow-pop); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+.react-flow__controls-button { background: var(--surface); color: var(--text-primary); border-bottom: 1px solid var(--border); fill: currentColor; }
+.react-flow__controls-button:hover { background: var(--surface-hover); }
+.react-flow__controls-button svg { fill: currentColor; }
+.react-flow__handle { transition: transform .12s ease; } .react-flow__handle:hover { transform: scale(1.35); }
+.react-flow__edge.selected .react-flow__edge-path { stroke-width: 3; }
+.react-flow__connection-path { stroke-dasharray: 6 5; }

@@ -9,7 +9,7 @@ const Quality = lazy(() => import("./pages/Quality")); const Automations = lazy(
 const Terminal = lazy(() => import("./pages/Terminal")); const Quotas = lazy(() => import("./pages/Quotas")); const Settings = lazy(() => import("./pages/Settings")); const Orchestrator = lazy(() => import("./pages/Orchestrator"));
 const Misc = lazy(() => import("./pages/Misc").then((m) => ({ default: m.Notifications }))); const Git = lazy(() => import("./pages/Misc").then((m) => ({ default: m.Git })));
 const Activity = lazy(() => import("./pages/Misc").then((m) => ({ default: m.ActivityPage })));
-const ExportView = lazy(() => import("./pages/Export")); const Quick = lazy(() => import("./pages/Quick")); const Onboarding = lazy(() => import("./components/Onboarding").then((m) => ({ default: m.Onboarding }))); const Library = lazy(() => import("./pages/Library")); const Knowledge = lazy(() => import("./pages/Knowledge"));
+const ExportView = lazy(() => import("./pages/Export")); const Quick = lazy(() => import("./pages/Quick")); const Onboarding = lazy(() => import("./components/Onboarding").then((m) => ({ default: m.Onboarding }))); const Library = lazy(() => import("./pages/Library")); const Knowledge = lazy(() => import("./pages/Knowledge")); const Studio = lazy(() => import("./pages/Studio"));
 export default function App() {
   // Le lanceur rapide est une fenêtre à part : pas de barre latérale ni de barre du haut.
   if (window.location.hash.startsWith("#/quick")) return <Suspense fallback={null}><Quick /></Suspense>;
@@ -25,6 +25,6 @@ function MainApp() {
     <Route path="/" element={<Home />} /><Route path="/overview" element={<Dashboard />} /><Route path="/chat" element={<Chat />} /><Route path="/work" element={<Work />} /><Route path="/code" element={<Code />} /><Route path="/projects" element={<Projects />} /><Route path="/agents" element={<Agents />} /><Route path="/tasks" element={<Tasks />} /><Route path="/orchestrator" element={<Orchestrator />} />
     <Route path="/sessions" element={<Sessions />} /><Route path="/terminal" element={<Terminal />} /><Route path="/analytics" element={<Analytics />} /><Route path="/quotas" element={<Quotas />} /><Route path="/git" element={<Git />} /><Route path="/activity" element={<Activity />} />
     <Route path="/notifications" element={<Misc />} /><Route path="/settings" element={<Settings />} />
-    <Route path="/library" element={<Library />} /><Route path="/knowledge" element={<Knowledge />} /><Route path="/quality" element={<Quality />} /><Route path="/automations" element={<Automations />} /><Route path="/workflows" element={<Workflows />} /><Route path="/compare" element={<Compare />} /><Route path="/mcp" element={<McpSkills />} />
+    <Route path="/library" element={<Library />} /><Route path="/knowledge" element={<Knowledge />} /><Route path="/studio" element={<Studio />} /><Route path="/quality" element={<Quality />} /><Route path="/automations" element={<Automations />} /><Route path="/workflows" element={<Workflows />} /><Route path="/compare" element={<Compare />} /><Route path="/mcp" element={<McpSkills />} />
   </Routes></Suspense></Shell><OverlayHost />{welcome && <Suspense fallback={null}><Onboarding onClose={() => setWelcome(false)} /></Suspense>}</HashRouter>;
 }

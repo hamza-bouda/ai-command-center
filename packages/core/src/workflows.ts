@@ -51,6 +51,8 @@ export class Workflows {
     if (w.id) { const cur = one<any>(this.db, "SELECT builtin FROM workflows WHERE id=?", w.id); if (!cur) throw new Error("Workflow introuvable"); if (cur.builtin) throw new Error("Un modèle livré n'est pas modifiable : dupliquez-le."); run(this.db, "UPDATE workflows SET name=?, description=?, nodes=?, updated_at=? WHERE id=?", w.name.trim(), w.description ?? null, JSON.stringify(c.plan!.tasks), now(), w.id); return w.id; }
     const id = uid(); run(this.db, "INSERT INTO workflows (id,key,name,description,nodes,builtin,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)", id, null, w.name.trim(), w.description ?? null, JSON.stringify(c.plan!.tasks), 0, now(), now()); return id;
   }
+  /** Validation à blanc d'un graphe en cours d'édition (erreurs bloquantes et avertissements), sans rien enregistrer. */
+  check(nodes: unknown, useWorktrees = false) { const c = validatePlan({ tasks: nodes }, { useWorktrees }); return { ok: c.ok, errors: c.errors, warnings: c.warnings }; }
   duplicate(id: string) { const w = this.get(id); if (!w) throw new Error("Workflow introuvable"); return this.save({ name: `${w.name} (copie)`, description: w.description, nodes: w.nodes }); }
   remove(id: string) { const w = one<any>(this.db, "SELECT builtin FROM workflows WHERE id=?", id); if (!w) return; if (w.builtin) throw new Error("Un modèle livré ne peut pas être supprimé."); run(this.db, "DELETE FROM workflows WHERE id=?", id); }
   /** Commandes qui seront exécutées dans le projet (à confirmer côté interface avant lancement). */

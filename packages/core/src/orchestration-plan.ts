@@ -2,10 +2,11 @@ import { AGENT_TEMPLATES } from "./templates.js";
 
 export type NodeKind = "agent" | "approval" | "test" | "notification";
 export const NODE_KINDS: NodeKind[] = ["agent", "approval", "test", "notification"];
-export interface PlanNode { key: string; title: string; description?: string; role: string; provider?: "claude" | "codex"; dependsOn: string[]; kind: NodeKind; gate?: boolean; /** commande du nœud « test » (exécutée dans le projet) */ command?: string }
+export interface PlanNode { key: string; title: string; description?: string; role: string; provider?: "claude" | "codex"; dependsOn: string[]; kind: NodeKind; gate?: boolean; /** commande du nœud « test » (exécutée dans le projet) */ command?: string; /** position dans l'éditeur graphique (sans effet sur l'exécution) */ pos?: { x: number; y: number } }
 export interface Plan { summary?: string; tasks: PlanNode[] }
 export interface PlanCheck { ok: boolean; errors: string[]; warnings: string[]; plan?: Plan; order?: string[] }
 export const MAX_TASKS = 12;
+const cleanPos = (p: any): { x: number; y: number } | undefined => (p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: Math.round(Math.max(-20000, Math.min(20000, p.x))), y: Math.round(Math.max(-20000, Math.min(20000, p.y))) } : undefined);
 const ROLE_KEYS = new Set(AGENT_TEMPLATES.map((t) => t.key));
 const WRITE_ROLES = new Set(AGENT_TEMPLATES.filter((t) => t.permission === "workspace-write").map((t) => t.key));
 export const isWriteRole = (r: string) => WRITE_ROLES.has(r);
@@ -40,7 +41,7 @@ export function validatePlan(raw: unknown, opts: { unavailable?: string[]; useWo
     let role = String(t?.role ?? "fullstack"); if (kind === "agent" && !ROLE_KEYS.has(role)) { warnings.push(`Rôle inconnu « ${role} » pour « ${key} » : remplacé par « fullstack ».`); role = "fullstack"; }
     const provider = t?.provider === "claude" || t?.provider === "codex" ? t.provider : undefined;
     if (t?.provider && !provider) warnings.push(`Fournisseur inconnu « ${t.provider} » pour « ${key} » : choix automatique.`);
-    nodes.push({ key, title, description: t?.description ? String(t.description) : undefined, role, provider, dependsOn: Array.isArray(t?.dependsOn) ? t.dependsOn.map(String) : [], kind, gate: !!t?.gate, command: kind === "test" ? String(t?.command ?? t?.description ?? "").trim().slice(0, 500) : undefined });
+    nodes.push({ key, title, description: t?.description ? String(t.description) : undefined, role, provider, dependsOn: Array.isArray(t?.dependsOn) ? t.dependsOn.map(String) : [], kind, gate: !!t?.gate, pos: cleanPos(t?.pos), command: kind === "test" ? String(t?.command ?? t?.description ?? "").trim().slice(0, 500) : undefined });
   });
   for (const n of nodes) { for (const d of n.dependsOn) { if (d === n.key) errors.push(`« ${n.key} » dépend de lui-même.`); else if (!seen.has(d)) errors.push(`« ${n.key} » dépend d'une tâche inexistante : « ${d} ».`); } n.dependsOn = [...new Set(n.dependsOn)]; }
   // cycles (algorithme de Kahn)

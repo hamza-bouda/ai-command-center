@@ -17,7 +17,7 @@ function WfGraph({ nodes: ns, height = 340 }: { nodes: PNode[]; height?: number 
   return <div className="card overflow-hidden" style={{ height }}><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.2} maxZoom={1.4} nodesDraggable={false} nodesConnectable={false} proOptions={{ hideAttribution: true }}><Background color="#27272e" gap={22} /><Controls showInteractive={false} /></ReactFlow></div>;
 }
 
-function RunDialog({ wf, onClose }: { wf: any; onClose: () => void }) {
+export function RunDialog({ wf, onClose }: { wf: any; onClose: () => void }) {
   const { data: projects } = useData<any[]>("projects.list", []); const [pid, setPid] = useState(""); const [goal, setGoal] = useState(""); const [wt, setWt] = useState(false); const [busy, setBusy] = useState(false); const [ok, setOk] = useState(false); const [cmds, setCmds] = useState<string[]>([]);
   useEffect(() => { if (projects?.length && !pid) setPid(projects[0].id); }, [projects]); useEffect(() => { if (wf) api("wf.commands", wf.id, goal || "…").then(setCmds).catch(() => setCmds([])); }, [wf, goal]);
   const go = async () => { setBusy(true); try { await api("wf.run", { workflowId: wf.id, projectId: pid, goal, useWorktrees: wt }); toast("Workflow lancé : suivez-le dans l'Orchestrateur.", "success"); onClose(); window.location.hash = "/orchestrator"; } catch (e: any) { toast(String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ""), "error"); } finally { setBusy(false); } };
@@ -50,7 +50,7 @@ export default function Workflows() {
   const [run, setRun] = useState<any>(); const [edit, setEdit] = useState<{ wf?: any } | null>(null); const [open, setOpen] = useState<string>();
   useEffect(() => { if (sp.get("new")) { setEdit({}); sp.delete("new"); setSp(sp, { replace: true }); } }, [sp]);
   const cur = list?.find((w) => w.id === open);
-  return <Page title="Workflows" sub="Des enchaînements réutilisables d'agents, de tests et de validations — lancés sur vos projets." actions={<button className="btn btn-primary" onClick={() => setEdit({})}><Plus size={15} />Nouveau workflow</button>}>
+  return <Page title="Workflows" sub="Des enchaînements réutilisables d'agents, de tests et de validations — lancés sur vos projets." actions={<button className="btn btn-primary" onClick={() => { window.location.hash = "/studio?new=1"; }}><Plus size={15} />Nouveau workflow</button>}>
     {err && !list ? <ErrorState message={err} onRetry={reload} /> : loading && !list ? <LoadingSkeleton rows={3} cards={3} /> : !list?.length ? <Card><EmptyState icon={WfIcon} title="Aucun workflow" desc="Créez un enchaînement réutilisable." /></Card>
       : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{list.map((w) => { const kinds = [...new Set(w.nodes.map((n: PNode) => n.kind))] as string[]; return <article key={w.id} className="card p-5 flex flex-col hover:border-line-strong transition-colors">
         <div className="flex items-start justify-between gap-2 mb-1"><h3 className="font-semibold">{w.name}</h3>{w.builtin ? <span className="text-2xs text-muted border border-line rounded px-1.5 py-0.5">Modèle</span> : <Badge v="subscription" text="Personnalisé" />}</div>
@@ -60,5 +60,5 @@ export default function Workflows() {
         <div className="mt-auto flex gap-2"><button className="btn btn-primary btn-sm" onClick={() => setRun(w)}><Play size={13} />Lancer</button><button className="btn btn-sm" onClick={() => setOpen(w.id)}>Détails</button><button className="btn btn-ghost btn-icon !h-7 !w-7 ml-auto" aria-label="Dupliquer" title="Dupliquer" onClick={async () => { await api("wf.duplicate", w.id); toast("Workflow dupliqué.", "success"); reload(); }}><Copy size={13} /></button>
           {!w.builtin && <button className="btn btn-ghost btn-icon !h-7 !w-7" aria-label="Supprimer" onClick={async () => { if (await confirmDialog({ title: "Supprimer ce workflow ?", body: "Le modèle est supprimé ; l'historique de ses exécutions est conservé.", confirmLabel: "Supprimer", danger: true })) { await api("wf.remove", w.id); reload(); } }}><Trash2 size={13} /></button>}</div></article>; })}</div>}
     <RunDialog wf={run} onClose={() => setRun(undefined)} /><Editor wf={edit?.wf} open={!!edit} onClose={() => setEdit(null)} onSaved={reload} />
-    {cur && <Detail wf={cur} onClose={() => setOpen(undefined)} onRun={() => { setRun(cur); }} onEdit={() => { setEdit({ wf: cur }); setOpen(undefined); }} reload={reload} />}</Page>;
+    {cur && <Detail wf={cur} onClose={() => setOpen(undefined)} onRun={() => { setRun(cur); }} onEdit={() => { window.location.hash = `/studio?id=${cur.id}`; }} reload={reload} />}</Page>;
 }

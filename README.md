@@ -156,16 +156,18 @@ Tout ce qui figure dans les sections ci-dessous est implémenté et a été test
 **Distribution**
 - Installateur **non signé** (certificat de signature de code requis) ; **Windows seulement**, macOS et Linux ne sont ni construits ni testés.
 - Mise à jour automatique : la détection d'une nouvelle version est testée, pas le téléchargement ni l'installation, et aucun serveur de mises à jour n'est configuré.
-- Pas de *Release* GitHub publiée, pas d'intégration continue, pas de licence.
+- Une intégration continue (GitHub Actions) vérifie les types, les tests et les vulnérabilités à chaque envoi ; elle compile aussi macOS et Linux, **sans jamais les tester**. Licence MIT. Pas de signature de code (certificat payant).
 
 **Fiabilité**
-- Tests unitaires et scénarios réels (Claude, Codex, interface via le port de débogage), mais **pas de suite Playwright** ni de CI.
+- Tests unitaires (vitest) et scénarios réels (Claude, Codex, interface via le port de débogage) ; ces scénarios réels sont des scripts à part, **pas une suite Playwright** dans le dépôt.
 - Interface vérifiée par audit automatique à 4 tailles de fenêtre ; pas de test sur de vrais petits écrans, d'autres facteurs d'échelle Windows, ni avec un lecteur d'écran.
 
 **Fonctionnel**
 - Automatisations : elles s'exécutent tant que l'application tourne. Le mode **arrière-plan** (Paramètres › Application) la garde active près de l'horloge et peut la lancer au démarrage de Windows (version installée) ; je n'ai pas observé une automatisation planifiée se déclencher fenêtre masquée.
 - En Chat, l'interdiction des outils est stricte côté Claude ; côté Codex elle repose sur une **surveillance** (l'outil interdit est interrompu et journalisé), pas sur un bac à sable.
-- Serveurs MCP distants : l'authentification OAuth n'est pas gérée et le test ne vérifie que la joignabilité.
+- Serveurs MCP distants : l'application ne fait jamais l'OAuth elle-même. Elle affiche la commande officielle de Codex (`codex mcp login`, dont la prise en compte du `-c` a été vérifiée), **non essayée avec un vrai serveur OAuth** ; le test d'un serveur ne vérifie que la joignabilité.
+- Dictée vocale : **absente**. La reconnaissance vocale intégrée à Electron échoue (erreur réseau, testée) ; utilisez `Windows+H` dans la zone de saisie. La lecture à voix haute utilise les voix de Windows.
+- Génération d'images : Codex seulement (Claude Code n'a pas d'outil d'image). Une image consomme environ 35 000 tokens de votre quota ChatGPT (testé).
 - Traduction anglaise : l'interface fixe est traduite, mais pas tous les messages dynamiques ni le contenu des conversations.
 - Les quotas des fournisseurs ne peuvent pas être contournés (par conception) ; les Chat/Work **natifs** de claude.ai et ChatGPT ne sont pas accessibles (aucune API officielle).
 
@@ -311,6 +313,19 @@ L'interface n'est pas un terminal : elle affiche des blocs interactifs que le mo
 **Sécurité de l'aperçu HTML** : il s'exécute dans un iframe `sandbox` servi par un schéma dédié (`acc-artifact://`) avec une politique de sécurité sans réseau. Le code de l'aperçu ne peut ni accéder à l'application, ni à son stockage, ni à Internet (vérifié). Les états des QCM et des choix sont mémorisés localement par bloc.
 
 Les JSON invalides sont affichés tels quels avec un message, sans faire échouer la réponse. En mode Code, l'outil interactif `AskUserQuestion` de Claude Code n'existe pas (exécution non interactive) : ces blocs en sont l'équivalent.
+
+## Fonctions ajoutées après l'audit
+
+| Fonction | Où | À savoir |
+|---|---|---|
+| **Génération d'images** | Fenêtre du modèle (Codex, Chat) › Génération d'images | Outil intégré de Codex, via votre **abonnement ChatGPT** (aucune clé API, jamais de repli sur un script qui en demande une). Image enregistrée dans le dossier de l'application et affichée dans la réponse ; désactivée, Codex répond qu'il ne peut pas. Testé en réel (plan Plus). |
+| **Export HTML et PDF** | Boutons en haut d'une conversation | Page autonome (graphiques, formules, diagrammes, images et polices intégrés, sans script) ou PDF, rendus par l'application. Les aperçus HTML interactifs ne sont pas inclus. |
+| **Mémoire** | Paramètres › Personnalisation | L'IA **propose** (bloc « Retenir ») ; rien n'est enregistré sans votre clic. Visible, supprimable, désactivable ; ≈ 450 tokens au plus par message. Sans lien avec les fichiers internes de Codex ou Claude. |
+| **Connaissances** | Menu › Connaissances, fenêtre du modèle | Documents rangés et indexés localement (SQLite FTS5) ; seuls les **extraits pertinents** (≈ 2 000 tokens au plus) sont envoyés, par mots-clés. |
+| **Aperçu des pièces jointes** | Clic sur la pièce jointe | Montre le texte exact que le modèle recevra, ou l'image. |
+| **Lecture à voix haute** | Icône haut-parleur sous une réponse | Voix de Windows, aucun service en ligne. |
+| **Sauvegarde** | Paramètres › Sauvegarde | Copie complète de la base, **sans** valeurs secrètes des serveurs MCP ; copie automatique hebdomadaire (5 conservées). |
+| **Barre de titre intégrée** | Fenêtre principale | Aux couleurs du thème (Windows/Linux) ; l'en-tête sert de zone de déplacement. |
 
 ## Confort d'usage (huit fonctions)
 

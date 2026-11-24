@@ -11,5 +11,6 @@
     "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p apps/desktop",
     "package": "npm run package -w @acc/desktop"
   },
+  "overrides": { "katex": "^0.19.1" },
   "devDependencies": { "typescript": "^5.6.0", "vitest": "^2.1.0", "@types/node": "^22.0.0" }
 }

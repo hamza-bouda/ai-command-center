@@ -1,1 +1,1 @@
-{"name":"@acc/core","version":"0.1.0","private":true,"type":"module","main":"src/index.ts","types":"src/index.ts","dependencies":{"@lydell/node-pty":"^1.2.0-beta.18","zod":"^3.23.0"}}
+{"name":"@acc/core","version":"0.1.0","private":true,"type":"module","main":"src/index.ts","types":"src/index.ts","dependencies":{"@lydell/node-pty":"^1.2.0-beta.18"}}

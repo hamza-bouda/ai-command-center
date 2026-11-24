@@ -1,11 +1,14 @@
 import { app, BrowserWindow, ipcMain, dialog, Notification, shell, screen, protocol, Tray, Menu, nativeImage, globalShortcut, desktopCapturer, nativeTheme } from "electron";
 import { randomUUID } from "node:crypto";
 // Aperçus HTML/SVG générés par le modèle : servis par un schéma dédié, avec une politique de sécurité qui autorise les scripts de la page mais aucun accès réseau ; affichés dans un iframe sandbox (origine opaque).
-protocol.registerSchemesAsPrivileged([{ scheme: "acc-artifact", privileges: { standard: true, secure: true } }]);
+protocol.registerSchemesAsPrivileged([{ scheme: "acc-artifact", privileges: { standard: true, secure: true } }, { scheme: "acc-image", privileges: { standard: true, secure: true } }]);
+/** Fichier d'image générée : « dossier/nom.png » strictement alphanumérique, résolu sous userData/images (jamais ailleurs). */
+const IMG_REF = /^[A-Za-z0-9_-]{1,80}\/[A-Za-z0-9_-]{1,80}\.png$/;
+const imagePath = (ref: string) => { if (!IMG_REF.test(ref)) throw new Error("Référence d'image invalide."); const root = join(app.getPath("userData"), "images"); const p = join(root, ...ref.split("/")); if (!p.startsWith(root + sep)) throw new Error("Référence d'image invalide."); return p; };
 const artifacts = new Map<string, string>();
 const ARTIFACT_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'";
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { createCore, type Core } from "@acc/core";
 import { autoUpdater } from "electron-updater";
 
@@ -32,7 +35,7 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
     "orch.create": (o: any) => c.orchestrator.create({ projectId: String(o.projectId), goal: String(o.goal ?? ""), mode: ["manual", "assisted", "auto"].includes(o.mode) ? o.mode : "assisted", plannerProvider: o.plannerProvider === "codex" ? "codex" : "claude", useWorktrees: !!o.useWorktrees }),
     "orch.replan": (id: string) => c.orchestrator.requestPlan(id), "orch.checkPlan": (id: string, plan: any) => c.orchestrator.checkPlan(id, plan), "orch.setPlan": (id: string, plan: any) => c.orchestrator.setPlan(id, plan), "orch.approve": (id: string) => c.orchestrator.approve(id), "orch.resume": (id: string) => c.orchestrator.resume(id), "orch.cancel": (id: string) => c.orchestrator.cancel(id), "orch.retryTask": (id: string) => c.orchestrator.retryTask(id), "orch.resolveGate": (id: string, ok: boolean) => c.orchestrator.resolveGate(id, !!ok),
     "ai.catalog": (p: any, force?: boolean) => c.ai.catalog(p === "codex" ? "codex" : "claude", !!force), "ai.policy": (m: any, p: any) => c.ai.policy(m, p === "codex" ? "codex" : "claude"), "ai.defaults": () => c.ai.defaults(), "ai.setDefault": (m: any, v: any) => { if (!["chat", "work", "code"].includes(m)) throw new Error("Mode inconnu"); c.ai.setDefault(m, v); },
-    "conv.create": (o: any) => c.conversations.create({ web: !!o.web, style: o.style || null, mode: o.mode, submode: o.submode, title: o.title, provider: o.provider === "codex" ? "codex" : "claude", model: o.model || null, effort: o.effort || null, projectId: o.projectId || null, workId: o.workId || null }),
+    "conv.create": (o: any) => c.conversations.create({ web: !!o.web, image: !!o.image, style: o.style || null, mode: o.mode, submode: o.submode, title: o.title, provider: o.provider === "codex" ? "codex" : "claude", model: o.model || null, effort: o.effort || null, projectId: o.projectId || null, workId: o.workId || null }),
     "conv.list": (f: any) => c.conversations.list({ mode: f.mode, archived: !!f.archived, favorite: !!f.favorite, q: f.q, projectId: f.projectId, submode: f.submode }), "conv.get": (id: string) => c.conversations.get(id), "conv.messages": (id: string) => c.conversations.messages(id), "conv.history": (id: string) => c.conversations.history(id), "conv.active": (id: string) => c.conversations.activeExecution(id) ?? null,
     "conv.rename": (id: string, t: string) => c.conversations.rename(id, t), "conv.favorite": (id: string, v: boolean) => c.conversations.setFavorite(id, !!v), "conv.archive": (id: string, v: boolean) => c.conversations.setArchived(id, !!v), "conv.remove": (id: string) => c.conversations.remove(id),
     "conv.send": (id: string, text: string, cfg?: any, att?: any[], img?: any[]) => c.conversations.send(id, String(text), cfg ? { provider: cfg.provider, model: cfg.model, effort: cfg.effort } : undefined, (att ?? []).map((a: any) => ({ name: String(a.name), content: String(a.content) })), (img ?? []).map((i: any) => ({ name: String(i.name), mime: String(i.mime), data: String(i.data) }))), "conv.stop": (id: string) => c.conversations.stop(id), "conv.regenerate": (id: string) => c.conversations.regenerate(id), "conv.continueInCode": (id: string, pid: string, sel?: string) => c.conversations.continueInCode(id, pid, sel),
@@ -64,6 +67,7 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
     "ext.testSaved": async (id: string) => { const e = (c.db.prepare("SELECT * FROM extensions WHERE id=? AND kind='mcp'").get(id) as any); if (!e) throw new Error("Serveur introuvable"); return c.extensions.test(JSON.parse(e.config)); },
     "ext.importSkillPath": (p: string, modes?: any[]) => { if (!c.system.skills().some((s: any) => s.path === p)) throw new Error("Skill non détectée dans les dossiers connus."); return c.extensions.importSkill(p, modes); },
     "artifact.put": (html: unknown) => { const s = String(html ?? ""); if (s.length > 1_000_000) throw new Error("Aperçu trop volumineux (1 Mo maximum)."); const id = randomUUID(); artifacts.set(id, s); if (artifacts.size > 100) artifacts.delete(artifacts.keys().next().value as string); return id; },
+    "image.save": async (ref: unknown) => { const p = imagePath(String(ref ?? "")); const r = await dialog.showSaveDialog(win!, { defaultPath: "image.png", filters: [{ name: "Image PNG", extensions: ["png"] }] }); if (r.canceled || !r.filePath) return null; (await import("node:fs")).copyFileSync(p, r.filePath); return r.filePath; },
     "file.saveText": async (name: unknown, content: unknown) => { const r = await dialog.showSaveDialog(win!, { defaultPath: String(name ?? "fichier.txt") }); if (r.canceled || !r.filePath) return null; (await import("node:fs")).writeFileSync(r.filePath, String(content ?? ""), "utf8"); return r.filePath; },
     // Capture de l'écran où se trouve la fenêtre, après l'avoir masquée (sinon l'application se capturerait elle-même).
     "screen.capture": async () => {
@@ -90,6 +94,7 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
     "onboarding.state": () => { const n = (tb: string) => Number((c.db.prepare(`SELECT COUNT(*) n FROM ${tb}`).get() as any).n); return { done: !!c.settings.get("onboarding.done", false), fresh: n("conversations") === 0 && n("projects") === 0 && n("agent_executions") === 0 }; },
     "onboarding.finish": () => { c.settings.set("onboarding.done", true); return true; },
     "conv.setWeb": (id: string, on: unknown) => c.conversations.setWeb(String(id), !!on),
+    "conv.setImage": (id: string, on: unknown) => c.conversations.setImage(String(id), !!on),
     "profile.get": () => c.profile.get(), "profile.save": (p: any) => c.profile.save({ about: p?.about, howto: p?.howto, defaultStyle: p?.defaultStyle }),
     "style.list": () => c.profile.list(), "style.saveCustom": (list: any) => c.profile.saveCustom(Array.isArray(list) ? list : []), "conv.setStyle": (id: string, style: string | null) => c.conversations.setStyle(String(id), style ? String(style) : null),
     "doc.status": () => c.converter.status(), "doc.install": () => c.converter.install(),
@@ -188,6 +193,7 @@ async function createWindow() {
 if (process.platform === "win32") app.setAppUserModelId("local.ai-command-center"); // même identifiant que le raccourci de l'installateur : épinglage et regroupement corrects dans la barre des tâches
 app.whenReady().then(async () => {
   if (!gotLock) { app.quit(); return; }
+  protocol.handle("acc-image", async (req) => { try { const u = new URL(req.url); const p = imagePath(decodeURIComponent(u.pathname.replace(/^\//, ""))); const { readFileSync } = await import("node:fs"); return new Response(readFileSync(p), { headers: { "content-type": "image/png", "x-content-type-options": "nosniff" } }); } catch { return new Response("Introuvable", { status: 404 }); } });
   protocol.handle("acc-artifact", (req) => { const html = artifacts.get(new URL(req.url).pathname.replace(/^\//, "")); if (html === undefined) return new Response("Introuvable", { status: 404 }); return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": ARTIFACT_CSP, "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" } }); });
   core = createCore({ dataDir: app.getPath("userData"), onTerminalEvent: (e) => { if (win && !win.isDestroyed()) win.webContents.send("acc:term", e); } });
   try { if (core.settings.get("backup.auto", true)) core.system.autoBackup(); } catch { /* non bloquant */ }

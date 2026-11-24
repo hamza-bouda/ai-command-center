@@ -43,10 +43,12 @@ class Rpc {
 }
 
 /** Réglages passés à `thread/start|resume` : serveurs MCP activés par l'utilisateur et, en Chat, état explicite de la recherche web (« disabled » par défaut : sans cela Codex peut chercher sur le web selon sa configuration locale). */
+/** Lecture seule de la fiche de la compétence « imagegen » de Codex : Codex la lit avant de générer une image ; c'est le seul accès autorisé en plus de l'outil d'image. */
+export function isImagegenSkillRead(it: any): boolean { const a = it?.commandActions; return Array.isArray(a) && a.length > 0 && a.every((x: any) => x?.type === "read" && /[\\/]\.codex[\\/]skills[\\/]\.system[\\/]imagegen[\\/][^\\/]+$/i.test(String(x.path ?? "")) && !/\.\./.test(String(x.path))); }
 export function codexConfig(req: RunRequest): Record<string, unknown> | undefined {
   const cfg: Record<string, unknown> = {};
   if (req.mcp?.length) cfg.mcp_servers = Object.fromEntries(req.mcp.map((m) => [m.name, m.transport === "http" ? { url: m.url, http_headers: m.headers ?? {}, default_tools_approval_mode: "approve" } : { command: m.command, args: m.args ?? [], env: m.env ?? {}, default_tools_approval_mode: "approve" }]));
-  if (req.policy === "chat") cfg.web_search = req.web ? "live" : "disabled";
+  if (req.policy === "chat") { cfg.web_search = req.web ? "live" : "disabled"; cfg.features = { image_generation: !!req.image }; }
   return Object.keys(cfg).length ? cfg : undefined;
 }
 export class CodexAdapter implements AgentProviderAdapter {
@@ -111,9 +113,13 @@ export class CodexAdapter implements AgentProviderAdapter {
         case "item/started": case "item/completed": {
           const it = p?.item; if (!it) break; const st = m === "item/started" ? "started" : "completed";
           if (it.type === "agentMessage" && st === "completed") lastText = it.text ?? lastText;
-          else if (it.type === "commandExecution") sink.event({ type: "tool", id: it.id, name: "shell", summary: trunc(String(it.command ?? "")), state: st === "completed" && (it.exitCode ?? 0) !== 0 ? "failed" : st });
+          else if (it.type === "commandExecution") sink.event({ type: "tool", id: it.id, name: isImagegenSkillRead(it) ? "imagegen_skill_read" : "shell", summary: trunc(String(it.command ?? "")), state: st === "completed" && (it.exitCode ?? 0) !== 0 ? "failed" : st });
           else if (it.type === "fileChange") { sink.event({ type: "tool", id: it.id, name: "apply_patch", summary: trunc((it.changes ?? []).map((c: any) => c.path).join(", ")), state: st }); if (st === "completed") sink.event({ type: "file_change", paths: (it.changes ?? []).map((c: any) => c.path).filter(Boolean) }); }
           else if (it.type === "mcpToolCall" || it.type === "dynamicToolCall" || it.type === "webSearch") sink.event({ type: "tool", id: it.id, name: it.type === "mcpToolCall" ? `mcp__${it.server}__${it.tool}` : it.tool ?? it.type, summary: trunc(JSON.stringify(it.arguments ?? it.query ?? {})), state: st });
+          else if (it.type === "imageGeneration") {
+            sink.event({ type: "tool", id: it.id, name: "image_generation", summary: "Génération d'image", state: st === "completed" && it.status === "failed" ? "failed" : st });
+            if (st === "completed") { if (it.result && it.status !== "failed" && !it.failure) sink.event({ type: "image", id: it.id, mime: "image/png", data: String(it.result), prompt: it.revisedPrompt ?? undefined }); else sink.event({ type: "error", message: `Génération d'image impossible : ${it.failure ? JSON.stringify(it.failure).slice(0, 200) : "aucune image reçue (le plan ChatGPT n'inclut peut-être pas cette fonction, ou le quota est atteint)"}` }); }
+          }
           else if (it.type === "collabAgentToolCall" || it.type === "subAgentActivity") sink.event({ type: "tool", id: it.id, name: "sub-agent", summary: trunc(JSON.stringify(it).slice(0, 200)), state: st });
           break;
         }

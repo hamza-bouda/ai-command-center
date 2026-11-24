@@ -6,20 +6,21 @@ import type { ExecEvent, ExecStatus, ProviderId, RunHandle, ProviderStatus, RunR
 import { createWorktree } from "./git.js";
 import { getSetting } from "./settings.js";
 import { join, resolve } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { snapshotDir, diffSnapshots } from "./fsnap.js";
 import { ProjectMemory } from "./system.js";
 
 export type ExecMode = "chat" | "work" | "code";
 /** Outils de recherche web autorisés en Chat quand l'utilisateur l'a activé pour la conversation (et eux seuls). */
 export const WEB_TOOLS = new Set(["WebSearch", "WebFetch", "webSearch"]);
-export interface EnqueueInput { web?: boolean; extensions?: { mcp: NonNullable<RunRequest["mcp"]>; skillsText: string }; images?: { name: string; mime: string; data: string }[]; permission?: "read-only" | "workspace-write"; projectId?: string | null; mode?: ExecMode; conversationId?: string | null; cwd?: string; effort?: string | null; systemPrompt?: string; agentId?: string | null; taskId?: string | null; provider?: ProviderId; model?: string | null; prompt: string; priority?: number; resumeSessionId?: string | null; parentExecutionId?: string | null; useWorktree?: boolean }
+export interface EnqueueInput { web?: boolean; image?: boolean; extensions?: { mcp: NonNullable<RunRequest["mcp"]>; skillsText: string }; images?: { name: string; mime: string; data: string }[]; permission?: "read-only" | "workspace-write"; projectId?: string | null; mode?: ExecMode; conversationId?: string | null; cwd?: string; effort?: string | null; systemPrompt?: string; agentId?: string | null; taskId?: string | null; provider?: ProviderId; model?: string | null; prompt: string; priority?: number; resumeSessionId?: string | null; parentExecutionId?: string | null; useWorktree?: boolean }
 const ACTIVE: ExecStatus[] = ["preparing", "running", "waiting_approval"];
 const TERMINAL: ExecStatus[] = ["completed", "failed", "cancelled", "interrupted"];
 
 interface Live { handle?: RunHandle; cancelRequested: boolean; buf: string; flush?: NodeJS.Timeout; approvals: Map<string, (ok: boolean) => void>; gotError?: string }
 
 export class ExecutionManager {
-  private live = new Map<string, Live>(); private pendingImages = new Map<string, { name: string; mime: string; data: string }[]>(); private pendingWeb = new Set<string>(); private pendingExt = new Map<string, { mcp: NonNullable<RunRequest["mcp"]>; skillsText: string }>();
+  private live = new Map<string, Live>(); private pendingImages = new Map<string, { name: string; mime: string; data: string }[]>(); private pendingWeb = new Set<string>(); private pendingImage = new Set<string>(); private imageBlocks = new Map<string, string[]>(); private pendingExt = new Map<string, { mcp: NonNullable<RunRequest["mcp"]>; skillsText: string }>();
   private normalizer: UsageNormalizer;
   private scheduling = false;
   constructor(private db: DB, private bus: EventBus, private adapters: Record<ProviderId, AgentProviderAdapter>, private statusOf: (p: ProviderId) => Promise<ProviderStatus>, private dataDir: string) { this.normalizer = new UsageNormalizer(db); }
@@ -55,6 +56,7 @@ export class ExecutionManager {
       if (i.taskId) run(this.db, "UPDATE tasks SET status='in_progress' WHERE id=? AND status IN ('todo','backlog','blocked')", i.taskId);
     });
     if (i.web && i.mode === "chat") this.pendingWeb.add(id);
+    if (i.image && i.mode === "chat") this.pendingImage.add(id);
     if (i.images?.length) this.pendingImages.set(id, i.images); if (i.extensions && (i.extensions.mcp.length || i.extensions.skillsText)) this.pendingExt.set(id, i.extensions);
     if (i.useWorktree) run(this.db, "UPDATE agent_executions SET worktree_id='pending' WHERE id=?", id);
     this.bus.emit("execution.queued", { provider, model }, { executionId: id, provider, projectId: i.projectId ?? undefined, agentId: i.agentId ?? undefined, taskId: i.taskId ?? undefined });
@@ -116,7 +118,7 @@ export class ExecutionManager {
       };
       this.transition(id, "running");
       const adapter = this.adapters[ex.provider as ProviderId];
-      const req = { executionId: id, prompt: ex.prompt, cwd, model: ex.model || undefined, permission: permission as any, instructions: instr, resumeSessionId: ex.provider_session_id || undefined, approvalPolicy: (agent?.approval_policy === "on-request" ? "on-request" : "never") as any, policy: mode, effort: ex.effort_requested || undefined, images: this.pendingImages.get(id), mcp: this.pendingExt.get(id)?.mcp, web: this.pendingWeb.has(id) };
+      const req = { executionId: id, prompt: ex.prompt, cwd, model: ex.model || undefined, permission: permission as any, instructions: instr, resumeSessionId: ex.provider_session_id || undefined, approvalPolicy: (agent?.approval_policy === "on-request" ? "on-request" : "never") as any, policy: mode, effort: ex.effort_requested || undefined, images: this.pendingImages.get(id), mcp: this.pendingExt.get(id)?.mcp, web: this.pendingWeb.has(id), image: this.pendingImage.has(id) };
       const before = snapshotDir(cwd); // détection des fichiers modifiés indépendante du fournisseur
       live.handle = adapter.startSession(req, sink, { exclusive });
       await live.handle.done;
@@ -139,21 +141,37 @@ export class ExecutionManager {
       if (ex.mode === "chat") { run(this.db, "INSERT INTO audit_events (id,type,provider,execution_id,payload,at) VALUES (?,?,?,?,?,?)", uid(), "policy.violation", ex.provider, id, JSON.stringify({ mode: "chat", filesChanged: changed.slice(0, 20) }), now()); this.notify("warn", "Chat : écriture détectée", `Des fichiers ont changé dans le dossier isolé : ${changed.slice(0, 3).join(", ")}`, "policy"); }
     } catch { /* la détection est un bonus, jamais bloquante */ }
   }
+  /** Enregistre l'image générée dans le dossier de l'application (jamais ailleurs) et la référence dans la réponse par un bloc « image ». */
+  private saveImage(id: string, ex: any, e: Extract<ExecEvent, { type: "image" }>) {
+    try {
+      const buf = Buffer.from(e.data, "base64"); if (buf.length < 8 || buf.length > 30 * 1024 * 1024 || buf.readUInt32BE(0) !== 0x89504e47) throw new Error("image illisible");
+      const scope = String(ex.conversation_id ?? id).replace(/[^A-Za-z0-9_-]/g, ""); const name = String(e.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60) + ".png";
+      const dir = join(this.dataDir, "images", scope); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, name), buf);
+      const block = `
+
+\`\`\`image
+${JSON.stringify({ file: `${scope}/${name}`, prompt: (e.prompt ?? "").slice(0, 400) })}
+\`\`\`
+`;
+      this.imageBlocks.set(id, [...(this.imageBlocks.get(id) ?? []), block]); this.log(id, "status", `image générée (${Math.round(buf.length / 1024)} Ko)`);
+    } catch (err: any) { this.log(id, "error", `Image non enregistrée : ${err.message}`); }
+  }
   private flush(id: string) { const l = this.live.get(id); if (!l) return; if (l.flush) { clearTimeout(l.flush); l.flush = undefined; } if (l.buf) { this.log(id, "text", l.buf); l.buf = ""; } }
   private onEvent(id: string, ex: any, e: ExecEvent) {
     const l = this.live.get(id); const ctx = { executionId: id, provider: ex.provider, projectId: ex.project_id, agentId: ex.agent_id ?? undefined, taskId: ex.task_id ?? undefined };
     switch (e.type) {
       case "text":
-        if (e.final) { run(this.db, "UPDATE agent_executions SET result_text=? WHERE id=?", e.text, id); break; }
+        if (e.final) { run(this.db, "UPDATE agent_executions SET result_text=? WHERE id=?", e.text + (this.imageBlocks.get(id) ?? []).join(""), id); break; }
         if (l) { l.buf += e.text; if (!l.flush) l.flush = setTimeout(() => this.flush(id), 300); }
         this.bus.emit("execution.text", { text: e.text }, ctx); break;
       case "tool":
-        if (ex.mode === "chat" && e.state === "started" && !(this.pendingWeb.has(id) && WEB_TOOLS.has(e.name)) && !(e.name.startsWith("mcp__") && (this.pendingExt.get(id)?.mcp ?? []).some((m) => e.name.startsWith(`mcp__${m.name}__`)))) { // ChatPolicy : aucun outil autorisé → interruption immédiate et trace d'audit
+        if (ex.mode === "chat" && e.state === "started" && !(this.pendingWeb.has(id) && WEB_TOOLS.has(e.name)) && !(this.pendingImage.has(id) && (e.name === "image_generation" || e.name === "imagegen_skill_read")) && !(e.name.startsWith("mcp__") && (this.pendingExt.get(id)?.mcp ?? []).some((m) => e.name.startsWith(`mcp__${m.name}__`)))) { // ChatPolicy : aucun outil autorisé → interruption immédiate et trace d'audit
           const msg = `Politique Chat : l'outil « ${e.name || "inconnu"} » est interdit en mode Chat. Exécution interrompue.`; this.log(id, "error", msg); if (l) l.gotError = msg;
           run(this.db, "INSERT INTO audit_events (id,type,provider,execution_id,payload,at) VALUES (?,?,?,?,?,?)", uid(), "policy.violation", ex.provider, id, JSON.stringify({ mode: "chat", tool: e.name, summary: e.summary }), now());
           this.notify("warn", "Chat : outil bloqué", msg, "policy"); void this.cancel(id); break;
         }
         this.flush(id); this.log(id, "tool", JSON.stringify(e)); this.bus.emit("execution.tool", e as any, ctx); break;
+      case "image": this.saveImage(id, ex, e); break;
       case "file_change": this.log(id, "file_change", JSON.stringify(e.paths)); this.bus.emit("execution.file_change", { paths: e.paths }, ctx); break;
       case "applied": run(this.db, "UPDATE agent_executions SET model=COALESCE(?,model), effort_applied=? WHERE id=?", e.model ?? null, e.effort ?? null, id); this.log(id, "status", `appliqué : modèle ${e.model ?? "?"}, effort ${e.effort ?? "géré par le fournisseur"} (${e.effortSource})`); break;
       case "status": this.log(id, "status", e.detail ?? ""); break;

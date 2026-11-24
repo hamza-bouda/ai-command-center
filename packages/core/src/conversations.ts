@@ -36,7 +36,7 @@ export class Conversations {
   private sandbox() { const d = join(this.dataDir, "chat-sandbox"); mkdirSync(d, { recursive: true }); return d; }
   private hist(id: string, kind: string, detail: string, config?: unknown) { run(this.db, "INSERT INTO conversation_config_history VALUES (?,?,?,?,?,?)", uid(), id, kind, detail, config ? JSON.stringify(config) : null, now()); }
 
-  async create(o: { mode: ExperienceMode; submode?: CodeSubmode; title?: string; provider: ProviderId; model?: string | null; effort?: string | null; projectId?: string | null; workId?: string | null; style?: string | null; web?: boolean }): Promise<string> {
+  async create(o: { mode: ExperienceMode; submode?: CodeSubmode; title?: string; provider: ProviderId; model?: string | null; effort?: string | null; projectId?: string | null; workId?: string | null; style?: string | null; web?: boolean; image?: boolean }): Promise<string> {
     if (!EXPERIENCE_MODES.includes(o.mode)) throw new Error("Mode inconnu");
     if (o.mode === "code" && !o.projectId) throw new Error("Le mode Code nécessite un projet.");
     if (o.mode !== "code" && o.projectId) throw new Error("Seul le mode Code peut être associé à un projet.");
@@ -46,6 +46,7 @@ export class Conversations {
     const id = uid(); run(this.db, "INSERT INTO conversations (id,mode,submode,title,provider,model,effort,project_id,work_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)", id, o.mode, o.mode === "code" ? o.submode ?? "direct" : null, o.title?.trim() || "Nouvelle conversation", o.provider, o.model || null, o.effort || null, o.projectId ?? null, o.workId ?? null, now(), now());
     if (o.style) run(this.db, "UPDATE conversations SET style=? WHERE id=?", o.style, id);
     if (o.web && o.mode === "chat") run(this.db, "UPDATE conversations SET web=1 WHERE id=?", id);
+    if (o.image && o.mode === "chat" && o.provider === "codex") run(this.db, "UPDATE conversations SET image=1 WHERE id=?", id);
     this.hist(id, "created",`${o.provider} · ${o.model || "modèle par défaut"} · effort ${o.effort || "géré par le fournisseur"}`, { provider: o.provider, model: o.model, effort: o.effort });
     this.bus.emit("conversation.created", { id, mode: o.mode }); return id;
   }
@@ -63,14 +64,16 @@ export class Conversations {
   activeExecution(id: string) { return one<any>(this.db, `SELECT id,status FROM agent_executions WHERE conversation_id=? AND status IN ('${ACTIVE.join("','")}') ORDER BY created_at DESC LIMIT 1`, id); }
   /** Invite système du mode ; en Chat, les outils MCP explicitement activés sont annoncés (sinon le modèle croit n'avoir aucun outil). */
   /** Invite système du mode + (si activé dans les Paramètres) la description des blocs riches que l'interface sait afficher. */
-  private systemPromptFor(mode: ExperienceMode, mcpNames: string[], style?: string | null, web = false): string | undefined {
-    const parts = [this.baseSystemPrompt(mode, mcpNames, web), this.profile?.textFor(style), getSetting<boolean>(this.db, "ui.richBlocks", true) === false ? "" : RICH_PROMPT].filter(Boolean) as string[];
+  private systemPromptFor(mode: ExperienceMode, mcpNames: string[], style?: string | null, web = false, image?: boolean): string | undefined {
+    const parts = [this.baseSystemPrompt(mode, mcpNames, web), this.profile?.textFor(style), mode !== "chat" ? "" : image ? "Tu peux générer des images avec l'outil de génération d'image intégré (aucune commande, aucun script, aucune clé API). L'image est affichée automatiquement dans la conversation : ne donne pas de chemin de fichier. Décris brièvement ce que tu as généré." : "Tu ne peux pas générer d'images dans cette conversation : n'en prétends jamais avoir produit et propose à l'utilisateur d'activer la génération d'images dans la fenêtre du modèle (Codex).", getSetting<boolean>(this.db, "ui.richBlocks", true) === false ? "" : RICH_PROMPT].filter(Boolean) as string[];
     return parts.length ? parts.join("\n\n") : undefined;
   }
   /** Recherche web en Chat : opt-in par conversation (le Chat n'a sinon aucun outil). Work et Code ont déjà leurs propres outils. */
   setWeb(id: string, on: boolean) { const conv = this.get(id); if (!conv) throw new Error("Conversation introuvable"); if (conv.mode !== "chat") throw new Error("La recherche web s'active uniquement dans le Chat."); run(this.db, "UPDATE conversations SET web=? WHERE id=?", on ? 1 : 0, id); this.hist(id, "web", on ? "Recherche web activée" : "Recherche web désactivée", { on }); }
   /** Style de réponse de la conversation (null = style par défaut des Paramètres). */
   setStyle(id: string, style: string | null) { if (!this.get(id)) throw new Error("Conversation introuvable"); if (style && !this.profile?.find(style)) throw new Error("Style inconnu."); run(this.db, "UPDATE conversations SET style=? WHERE id=?", style || null, id); }
+  /** Images en Chat : opt-in par conversation, uniquement avec Codex (Claude Code n'a pas d'outil de génération d'image). */
+  setImage(id: string, on: boolean) { const conv = this.get(id); if (!conv) throw new Error("Conversation introuvable"); if (conv.mode !== "chat") throw new Error("La génération d'images se règle dans le Chat ; Work et Code ont leurs propres outils."); if (on && conv.provider !== "codex") throw new Error("La génération d'images utilise Codex (abonnement ChatGPT). Changez de fournisseur dans la fenêtre du modèle."); run(this.db, "UPDATE conversations SET image=? WHERE id=?", on ? 1 : 0, id); this.hist(id, "image", on ? "Génération d'images activée" : "Génération d'images désactivée", { on }); }
   private baseSystemPrompt(mode: ExperienceMode, mcpNames: string[], web = false): string | undefined {
     if (mode === "chat" && web) return "Tu es un assistant conversationnel. Réponds de façon claire et structurée (Markdown), en français sauf demande contraire. Tu n'as accès à aucun fichier ni commande. Seule la recherche web est activée pour cette conversation (outils de recherche et de lecture de pages) : utilise-la quand une information récente ou vérifiable est nécessaire, et cite tes sources avec des liens." + (mcpNames.length ? " Les outils des serveurs MCP suivants, activés par l'utilisateur, sont aussi disponibles : " + mcpNames.join(", ") + "." : "");
     if (mode === "chat" && mcpNames.length) return"Tu es un assistant conversationnel. Réponds de façon claire et structurée (Markdown), en français sauf demande contraire. Tu n'as accès à aucun fichier ni commande système. Seuls les outils des serveurs MCP suivants, activés explicitement par l'utilisateur, sont disponibles et tu dois les utiliser quand la demande s'y rapporte : " + mcpNames.join(", ") + ".";
@@ -93,6 +96,7 @@ export class Conversations {
     const nid = uid(); const t = now(); const title = `${String(conv.title).replace(/ \(modifié\)$/, "")} (modifié)`.slice(0, 90);
     tx(this.db, () => {
       run(this.db, "INSERT INTO conversations (id,mode,submode,title,provider,model,effort,project_id,work_id,style,ext_disabled,parent_id,web,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", nid, conv.mode, conv.submode, title, conv.provider, conv.model, conv.effort, conv.project_id, null, conv.style, conv.ext_disabled, id, conv.web ?? 0, t, t);
+      if (conv.image) run(this.db, "UPDATE conversations SET image=1 WHERE id=?", nid);
       for (const m of msgs.slice(0, idx)) if ((m.role === "user" || m.role === "assistant") && (m.status === "completed" || m.role === "user")) run(this.db, "INSERT INTO conversation_messages (id,conversation_id,role,content,provider,model,effort_applied,execution_id,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)", uid(), nid, m.role, m.content, m.provider, m.model, m.effort_applied, null, m.status, m.created_at);
     });
     this.hist(nid, "created", `Branche de « ${conv.title} » (message modifié)`, { parent: id }); this.bus.emit("conversation.created", { id: nid, mode: conv.mode });
@@ -146,7 +150,7 @@ ${f}`; }).join(""); const ctxParts: string[] = [];
     const umid = uid(); const first = !one(this.db, "SELECT 1 x FROM conversation_messages WHERE conversation_id=? AND role='user'", id);
     run(this.db, "INSERT INTO conversation_messages (id,conversation_id,role,content,provider,model,created_at) VALUES (?,?,?,?,?,?,?)", umid, id, "user", shown, next.provider, next.model || null, now());
     if (first && /^Nouvelle conversation$/.test(conv.title)) run(this.db, "UPDATE conversations SET title=? WHERE id=?", text.trim().replace(/\s+/g, " ").slice(0, 60), id);
-    const executionId = this.exec.enqueue({ projectId: conv.mode === "code" ? conv.project_id : null, mode: conv.mode, conversationId: id, cwd, provider: next.provider, model: next.model || undefined, effort: next.effort, prompt, images: imgs, web: conv.mode === "chat" && !!conv.web, extensions: extResolved ? { mcp: extResolved.mcp, skillsText: extResolved.skillsText } : undefined, resumeSessionId: sessionUsable ? conv.provider_session_id : null, systemPrompt: this.systemPromptFor(conv.mode as ExperienceMode, extResolved?.mcp.map((m) => m.name) ?? [], conv.style, conv.mode === "chat" && !!conv.web), priority: 7 });
+    const executionId = this.exec.enqueue({ projectId: conv.mode === "code" ? conv.project_id : null, mode: conv.mode, conversationId: id, cwd, provider: next.provider, model: next.model || undefined, effort: next.effort, prompt, images: imgs, web: conv.mode === "chat" && !!conv.web, image: conv.mode === "chat" && !!conv.image && next.provider === "codex", extensions: extResolved ? { mcp: extResolved.mcp, skillsText: extResolved.skillsText } : undefined, resumeSessionId: sessionUsable ? conv.provider_session_id : null, systemPrompt: this.systemPromptFor(conv.mode as ExperienceMode, extResolved?.mcp.map((m) => m.name) ?? [], conv.style, conv.mode === "chat" && !!conv.web, conv.mode === "chat" && !!conv.image && next.provider === "codex"), priority: 7 });
     run(this.db, "UPDATE conversation_messages SET execution_id=? WHERE id=?", executionId, umid); run(this.db, "UPDATE conversations SET updated_at=? WHERE id=?", now(), id);
     return { executionId, newSession, notice };
   }

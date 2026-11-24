@@ -83,6 +83,7 @@ ALTER TABLE conversations ADD COLUMN ext_disabled TEXT;`,
 `ALTER TABLE conversations ADD COLUMN style TEXT;`,
 `ALTER TABLE conversations ADD COLUMN parent_id TEXT;`,
 `ALTER TABLE conversations ADD COLUMN web INTEGER DEFAULT 0;`,
+`ALTER TABLE conversations ADD COLUMN image INTEGER DEFAULT 0;`,
 ];
 
 export const MIGRATION_COUNT = () => MIGRATIONS.length;

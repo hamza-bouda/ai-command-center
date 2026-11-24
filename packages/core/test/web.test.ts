@@ -22,7 +22,7 @@ describe("Recherche web en Chat : arguments des fournisseurs", () => {
     const code = buildClaudeArgs(base({ policy: "code", web: true })); expect(code).not.toContain("--tools"); expect(code).not.toContain("--allowedTools");
   });
   it("Codex : en Chat la recherche est explicitement « disabled » sauf activation (« live »), jamais forcée ailleurs", () => {
-    expect(codexConfig(base())).toEqual({ web_search: "disabled" }); expect(codexConfig(base({ web: true }))).toEqual({ web_search: "live" }); expect(codexConfig(base({ policy: "code" }))).toBeUndefined();
+    expect(codexConfig(base())).toEqual({ web_search: "disabled", features: { image_generation: false } }); expect(codexConfig(base({ web: true }))).toEqual({ web_search: "live", features: { image_generation: false } }); expect(codexConfig(base({ policy: "code" }))).toBeUndefined();
     const m = codexConfig(base({ web: true, mcp: [{ name: "d", transport: "stdio", command: "node", args: [] }] as any }))!; expect(m.web_search).toBe("live"); expect(Object.keys(m.mcp_servers as object)).toEqual(["d"]);
   });
 });

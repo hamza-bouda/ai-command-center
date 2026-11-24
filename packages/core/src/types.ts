@@ -41,6 +41,7 @@ export type ExecEvent =
   | { type: "text"; text: string; final?: boolean }
   | { type: "tool"; id: string; name: string; summary: string; state: "started"|"completed"|"failed" }
   | { type: "file_change"; paths: string[] }
+  | { type: "image"; id: string; mime: string; data: string; prompt?: string }
   | { type: "usage"; report: UsageReport }
   | { type: "quota"; quota: QuotaStatus }
   | { type: "session"; providerSessionId: string }
@@ -61,6 +62,8 @@ export interface RunRequest {
   /** Serveurs MCP activés par l'utilisateur pour ce mode/cette conversation. */
   /** Chat uniquement : autorise la recherche web (WebSearch/WebFetch côté Claude, web_search côté Codex) pour cette exécution. */
   web?: boolean;
+  /** Génération d'images (Codex, abonnement ChatGPT) : activée explicitement en Chat. */
+  image?: boolean;
   mcp?: { name: string; transport: "stdio" | "http"; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string> }[];
 }
 export interface RunHandle { cancel(): Promise<void>; done: Promise<void> }

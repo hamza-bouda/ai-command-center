@@ -138,11 +138,25 @@ function ArtifactView({ code, kind }: { code: string; kind: "html" | "svg" }) {
     <Modal open={full} onClose={() => setFull(false)} width="max-w-5xl" title={kind === "svg" ? "Image SVG" : "Aperçu HTML"}><div className="-m-1">{frame("70vh")}</div></Modal></Shell>;
 }
 
+/** Image générée par Codex (abonnement ChatGPT), enregistrée dans le dossier de l'application et servie par le protocole local `acc-image`. */
+function ImageBlock({ raw }: { raw: string }) {
+  const { streaming } = useContext(RichScope); const [big, setBig] = useState(false); const [bad, setBad] = useState(false);
+  let meta: { file?: string; prompt?: string } = {}; try { meta = JSON.parse(raw); } catch { /* en cours */ }
+  if (!meta.file || !/^[A-Za-z0-9_-]{1,80}\/[A-Za-z0-9_-]{1,80}\.png$/.test(meta.file)) return streaming ? <Pending what="l'image" /> : <div className="my-4 rounded-2xl border border-line px-4 py-3 text-[13px] text-muted not-prose">Image indisponible.</div>;
+  const src = `acc-image://f/${meta.file}`; const alt = meta.prompt || "Image générée";
+  const save = async () => { try { const p = await api("image.save", meta.file); if (p) toast(`Image enregistrée : ${p}`, "success"); } catch (e: any) { toast(String(e.message), "error"); } };
+  if (bad) return <div className="my-4 rounded-2xl border border-line px-4 py-3 text-[13px] text-muted not-prose">Image introuvable sur cet ordinateur (fichier supprimé ou conversation restaurée sans ses images).</div>;
+  return <figure className="my-4 not-prose"><div className="relative inline-block max-w-full group"><img src={src} alt={alt} className="max-h-[420px] max-w-full rounded-2xl border border-line cursor-zoom-in" onError={() => setBad(true)} onClick={() => setBig(true)} />
+    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"><button className="btn btn-icon !h-8 !w-8 bg-panel/90" aria-label="Agrandir l'image" onClick={() => setBig(true)}><Maximize2 size={14} /></button><button className="btn btn-icon !h-8 !w-8 bg-panel/90" aria-label="Enregistrer l'image" onClick={save}><Download size={14} /></button></div></div>
+    {meta.prompt && <figcaption className="text-2xs text-muted mt-1.5 max-w-prose">{meta.prompt}</figcaption>}
+    <Modal open={big} onClose={() => setBig(false)} width="max-w-4xl" title="Image générée" footer={<button className="btn" onClick={save}><Download size={14} />Enregistrer</button>}><img src={src} alt={alt} className="max-w-full max-h-[70vh] mx-auto rounded-xl" /></Modal></figure>;
+}
 /** Langages de blocs de code rendus de façon interactive. ```artifact = page HTML complète exécutée dans un cadre isolé (```html reste du code affiché tel quel). */
-export const RICH_LANGS = new Set(["quiz", "qcm", "choices", "chart", "mermaid", "artifact", "svg", "html"]);
+export const RICH_LANGS = new Set(["image", "quiz", "qcm", "choices", "chart", "mermaid", "artifact", "svg", "html"]);
 export function richBlock(lang: string, code: string): ReactNode | null {
   switch (lang) {
     case "quiz": case "qcm": return <QuizBlock raw={code} />; case "choices": return <ChoicesBlock raw={code} />; case "chart": return <ChartBlock raw={code} />; case "mermaid": return <MermaidBlock code={code} />;
+    case "image": return <ImageBlock raw={code} />;
     case "artifact": return <ArtifactBlock code={code} kind="html" />; case "html": return /^\s*(<!doctype html|<html[\s>])/i.test(code) ? <ArtifactBlock code={code} kind="html" /> : null;
     case "svg": return /<\s*svg/i.test(code) ? <ArtifactBlock code={code} kind="svg" /> : null; default: return null;
   }

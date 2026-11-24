@@ -4,7 +4,7 @@ import ReactFlow, { ReactFlowProvider, Background, BackgroundVariant, Controls, 
 import "reactflow/dist/style.css";
 import { Compass, LayoutTemplate, Server, Layers, Database, ShieldCheck, Rocket, CheckCheck, Bug, Eye, BookOpen, Gauge, Wrench, Palette, PanelLeftClose, PanelLeftOpen, ArrowLeft, Bot, ShieldAlert, FlaskConical, Bell, Crown, Save, Play, LayoutGrid, Wand2, Trash2, AlertTriangle, CheckCircle2, Sparkles, Plus, GitBranch, Loader2, Copy } from "lucide-react";
 import { api } from "../api"; import { useData } from "../hooks"; import { toast, confirmDialog } from "../overlay"; import { Modal, Field } from "../ui";
-import { ROLES } from "../components/NodeListEditor"; import { RunDialog } from "./Workflows";
+import { ROLES } from "../components/NodeListEditor"; import { RunDialog } from "./Workflows"; import { AgentCockpit } from "../components/AgentCockpit";
 import { slugKey, wouldCycle, toPlan, edgesOf, autoLayout, roots, MAX_NODES, type SNode, type Kind } from "../studio/graph";
 
 const errMsg = (e: any) => String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
@@ -21,15 +21,15 @@ const roleLabel = (k: string) => ROLES.find(([r]) => r === k)?.[1] ?? k;
 const ORCH = "__orch";
 
 type Dir = "LR" | "TB";
-interface NData { node: SNode; issues: string[]; dir?: Dir }
+interface NData { node: SNode; issues: string[]; dir?: Dir; run?: { status: string; tokens: number } }
 function StudioNode({ data, selected }: NodeProps<NData>) {
   const n = data.node; const K = styleOf(n.kind, n.role); const I = K.icon; const bad = data.issues.length > 0;
-  return <div className="w-[208px] rounded-2xl bg-panel transition-all duration-150" style={{ border: `1.5px solid ${selected ? K.color : bad ? "var(--danger)" : "var(--border-strong)"}`, boxShadow: selected ? `0 0 0 4px color-mix(in srgb, ${K.color} 18%, transparent), var(--shadow-pop)` : "0 6px 20px rgba(0,0,0,.18)" }}>
+  return <div className={`w-[208px] rounded-2xl bg-panel transition-all duration-150 ${data.run?.status === "in_progress" ? "node-live" : ""}`} style={{ border: `1.5px solid ${selected ? K.color : bad ? "var(--danger)" : "var(--border-strong)"}`, boxShadow: selected ? `0 0 0 4px color-mix(in srgb, ${K.color} 18%, transparent), var(--shadow-pop)` : "0 6px 20px rgba(0,0,0,.18)" }}>
     <Handle type="target" position={data.dir === "TB" ? Position.Top : Position.Left} className="!w-3 !h-3 !border-2 !bg-panel" style={{ borderColor: K.color, ...(data.dir === "TB" ? { top: -7 } : { left: -7 }) }} />
     <div className="h-1.5 rounded-t-2xl" style={{ background: `linear-gradient(90deg, ${K.color}, color-mix(in srgb, ${K.color} 25%, transparent))` }} />
     <div className="p-3"><div className="flex items-center gap-2 mb-1.5"><span className="w-7 h-7 rounded-lg grid place-items-center shrink-0" style={{ background: `color-mix(in srgb, ${K.color} 16%, transparent)`, color: K.color }}><I size={15} /></span>
       <span className="text-2xs text-muted flex-1 truncate">{n.kind === "agent" ? roleLabel(n.role) : K.label}</span>
-      {n.gate && <span title="Validation avant exécution" className="text-warning"><ShieldAlert size={13} /></span>}{bad && <span title={data.issues.join("\n")} className="text-danger"><AlertTriangle size={13} /></span>}</div>
+      {data.run && <span className={`text-2xs font-medium rounded-full px-1.5 py-0.5 ${data.run.status === "done" ? "bg-[var(--success-subtle,rgba(34,197,94,.15))] text-success" : data.run.status === "blocked" ? "bg-[var(--danger-subtle,rgba(239,68,68,.15))] text-danger" : data.run.status === "in_progress" ? "bg-accent-subtle text-accent" : "bg-raised text-muted"}`}>{data.run.status === "done" ? "✓ terminé" : data.run.status === "blocked" ? "bloqué" : data.run.status === "in_progress" ? "en cours" : data.run.status === "review" ? "à valider" : "en attente"}</span>}{n.gate && <span title="Validation avant exécution" className="text-warning"><ShieldAlert size={13} /></span>}{bad && <span title={data.issues.join("\n")} className="text-danger"><AlertTriangle size={13} /></span>}</div>
       <div className="text-[13px] font-semibold leading-snug line-clamp-2">{n.title}</div>
       <div className="flex items-center gap-1.5 mt-2 text-2xs text-muted">{n.kind === "agent" && <><span className="w-1.5 h-1.5 rounded-full" style={{ background: n.provider === "claude" ? "var(--claude)" : n.provider === "codex" ? "var(--codex)" : "var(--text-muted)" }} />{n.provider === "claude" ? "Claude" : n.provider === "codex" ? "Codex" : "Choix auto"}</>}{n.kind === "test" && <span className="mono truncate">{n.command || "commande ?"}</span>}</div></div>
     <Handle type="source" position={data.dir === "TB" ? Position.Bottom : Position.Right} className="!w-3 !h-3 !border-2 !bg-panel" style={{ borderColor: K.color, ...(data.dir === "TB" ? { bottom: -7 } : { right: -7 }) }} /></div>;
@@ -50,7 +50,7 @@ function StudioInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<NData | { count: number }>([]); const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [name, setName] = useState("Nouveau workflow"); const [desc, setDesc] = useState(""); const [sel, setSel] = useState<string | null>(null); const [dirty, setDirty] = useState(false);
   const [check, setCheck] = useState<{ ok: boolean; errors: string[]; warnings: string[] }>({ ok: true, errors: [], warnings: [] }); const [loadedFor, setLoadedFor] = useState<string | null>(null); const [start, setStart] = useState(isNew && !wfId);
-  const [rail, setRail] = useState(false); const [dir, setDir] = useState<Dir>("LR"); const dirRef = useRef<Dir>("LR"); const [runWf, setRunWf] = useState<any>(); const [propose, setPropose] = useState(false); const wrap = useRef<HTMLDivElement>(null); const rf = useReactFlow(); const updateInternals = useUpdateNodeInternals(); const useWt = useRef(false);
+  const [runId, setRunId] = useState<string | null>(null); const evRun = { events: /orchestration|execution|task|approval|usage/ as RegExp, enabled: !!runId }; const { data: runTasks, reload: reloadRun } = useData<any[]>("orch.tasks", [runId ?? ""], evRun); const { data: runOrch } = useData<any>("orch.get", [runId ?? ""], evRun); const { data: runHs } = useData<any[]>("orch.handoffs", [runId ?? ""], evRun); const [rail, setRail] = useState(false); const [dir, setDir] = useState<Dir>("LR"); const dirRef = useRef<Dir>("LR"); const [runWf, setRunWf] = useState<any>(); const [propose, setPropose] = useState(false); const wrap = useRef<HTMLDivElement>(null); const rf = useReactFlow(); const updateInternals = useUpdateNodeInternals(); const useWt = useRef(false);
 
   const steps = useMemo(() => nodes.filter((n) => n.id !== ORCH).map((n) => (n.data as NData).node), [nodes]);
   const realEdges = useMemo(() => edges.filter((e) => !e.id.startsWith("v-")), [edges]);
@@ -76,6 +76,9 @@ function StudioInner() {
   }, [plan]);
   useEffect(() => { const msgs = [...check.errors, ...check.warnings]; setNodes((ns) => ns.map((n) => { if (n.id === ORCH) return (n.data as any).count === steps.length ? n : { ...n, data: { ...(n.data as any), count: steps.length } }; const d = n.data as NData; const issues = msgs.filter((m) => m.includes(`« ${n.id} »`)); return JSON.stringify(issues) === JSON.stringify(d.issues) ? n : { ...n, data: { ...d, issues } }; })); }, [check, steps.length]);
 
+  // suivi d'une exécution : l'état de chaque tâche s'affiche sur le nœud de même clé
+  useEffect(() => { if (!runId) { setNodes((ns) => ns.map((n) => (n.id === ORCH || !(n.data as NData).run ? n : { ...n, data: { ...(n.data as NData), run: undefined } }))); return; }
+    const by = new Map((runTasks ?? []).map((t: any) => [t.node_key, t])); setNodes((ns) => ns.map((n) => { if (n.id === ORCH) return n; const t: any = by.get(n.id); const d = n.data as NData; const run = t ? { status: t.status, tokens: t.tokens ?? 0 } : undefined; return JSON.stringify(run) === JSON.stringify(d.run) ? n : { ...n, data: { ...d, run } }; })); }, [runId, runTasks]);
   const patch = (key: string, p: Partial<SNode>) => { setNodes((ns) => ns.map((n) => (n.id === key ? { ...n, data: { ...(n.data as NData), node: { ...(n.data as NData).node, ...p } } } : n))); setDirty(true); };
   const add = (kind: Kind, role = "fullstack", at?: { x: number; y: number }) => {
     if (steps.length >= MAX_NODES) { toast(`${MAX_NODES} étapes au maximum par workflow.`, "error"); return; }
@@ -94,7 +97,7 @@ function StudioInner() {
   };
   const run = async () => { const id = dirty || !wfId ? await save() : wfId; if (id) setRunWf({ id, name, nodes: plan }); };
   const arrange = (d: Dir = dir) => { const pos = autoLayout(steps, d === "LR" ? 245 : 230, d === "LR" ? 130 : 165, d); dirRef.current = d; setDir(d); setTimeout(() => updateInternals([...steps.map((x) => x.key), ORCH]), 50); setNodes((ns) => ns.map((n) => (n.id === ORCH ? { ...n, position: d === "LR" ? { x: -250, y: 0 } : { x: 0, y: -215 }, data: { ...(n.data as any), dir: d } } : { ...n, position: pos.get(n.id) ?? n.position, data: { ...(n.data as NData), dir: d } }))); setDirty(true); setTimeout(() => rf.fitView({ padding: 0.12, minZoom: 0.55, maxZoom: 1, duration: 400 }), 60); };
-  const selNode = sel && sel !== ORCH ? steps.find((s) => s.key === sel) : undefined; const incoming = selNode ? realEdges.filter((e) => e.target === selNode.key).length : 0;
+  const selNode = sel && sel !== ORCH && !runId ? steps.find((s) => s.key === sel) : undefined; const cockpitTask = runId && sel ? (runTasks ?? []).find((t: any) => t.node_key === sel) : undefined; const done = (runTasks ?? []).filter((t: any) => t.status === "done").length; const incoming = selNode ? realEdges.filter((e) => e.target === selNode.key).length : 0;
 
   const fromTemplate = (w: any) => { setName(w.builtin ? `${w.name} (copie)` : w.name); setDesc(w.description ?? ""); load(w.nodes.map((n: SNode) => ({ ...n, pos: undefined }))); setStart(false); setDirty(true); };
   const back = () => { window.location.hash = "/workflows"; };
@@ -109,6 +112,8 @@ function StudioInner() {
       <div className="ml-auto flex items-center gap-2"><button className="btn btn-sm" onClick={() => setPropose(true)} title="L'agent orchestrateur propose un graphe à partir d'un objectif"><Wand2 size={14} />Proposer avec l'orchestrateur</button><button className="btn btn-sm" onClick={() => arrange(dir)}><LayoutGrid size={14} />Ranger</button><button className="btn btn-sm" aria-label={dir === "LR" ? "Passer en disposition verticale" : "Passer en disposition horizontale"} title={dir === "LR" ? "Disposition verticale (haut → bas)" : "Disposition horizontale (gauche → droite)"} onClick={() => arrange(dir === "LR" ? "TB" : "LR")}>{dir === "LR" ? "↓ Vertical" : "→ Horizontal"}</button>
         {wf?.builtin ? <button className="btn btn-primary btn-sm" onClick={async () => { const id = await api("wf.duplicate", wf.id); reload(); setLoadedFor(null); setSp({ id }, { replace: true }); toast("Copie créée : vous pouvez la modifier.", "success"); }}><Copy size={14} />Dupliquer pour modifier</button> : <button className="btn btn-sm" disabled={!dirty} onClick={() => void save()}><Save size={14} />Enregistrer</button>}
         <button className="btn btn-primary btn-sm" disabled={!steps.length || check.errors.length > 0} onClick={() => void run()}><Play size={14} />Lancer</button></div></div>
+    {runId && <div className="shrink-0 h-11 border-b border-line flex items-center gap-3 px-4 bg-accent-subtle text-[13px]" role="status"><span className={`w-2 h-2 rounded-full bg-accent ${["running", "planning"].includes(runOrch?.status) ? "pulse-dot" : ""}`} /><b>Exécution</b><span>{runOrch?.status === "completed" ? "terminée" : runOrch?.status === "paused" ? "en pause" : runOrch?.status === "failed" ? "échouée" : runOrch?.status === "cancelled" ? "annulée" : "en cours"} · {done}/{(runTasks ?? []).length} étapes</span><span className="text-muted hidden md:inline">Cliquez une étape pour ouvrir son cockpit (terminal, interface, contexte).</span>
+      <div className="ml-auto flex gap-2"><button className="btn btn-sm" onClick={() => { window.location.hash = "/orchestrator"; }}>Mur d'agents</button><button className="btn btn-sm" onClick={() => { setRunId(null); setSel(null); }}>Fin du suivi</button></div></div>}
     <div className="flex-1 flex min-h-0">
       <aside aria-label="Palette" className={`${rail ? "w-[60px]" : "w-[200px]"} shrink-0 border-r border-line bg-sidebar overflow-auto p-2.5 space-y-3 transition-[width] duration-200`}>
         <button className="btn btn-ghost btn-icon !h-8 !w-8" aria-label={rail ? "Déployer la palette" : "Réduire la palette"} title={rail ? "Déployer la palette" : "Réduire la palette"} onClick={() => setRail(!rail)}>{rail ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}</button>
@@ -130,7 +135,8 @@ function StudioInner() {
   {sel && <aside aria-label="Réglages de l'étape" className="w-[320px] shrink-0 border-l border-line bg-sidebar overflow-auto p-4 anim-slide">{sel === ORCH ? <OrchPanel count={steps.length} onWt={(v) => { useWt.current = v; setDirty(true); }} onPropose={() => setPropose(true)} />
           : selNode ? <Inspector node={selNode} incoming={incoming} onPatch={(p) => patch(selNode.key, p)} onDelete={() => remove(selNode.key)} /> : null}</aside>}
     </div>
-    <RunDialog wf={runWf} onClose={() => setRunWf(undefined)} />
+    <RunDialog wf={runWf} onClose={() => setRunWf(undefined)} onLaunched={(oid) => { setRunId(oid); setSel(null); }} />
+    <AgentCockpit task={cockpitTask} orch={runOrch ?? { project_id: "" }} handoffs={runHs ?? []} onClose={() => setSel(null)} onChanged={reloadRun} />
     <ProposeDialog open={propose} onClose={() => setPropose(false)} hasNodes={steps.length > 0} onPlan={(tasks) => { load(tasks.map((t) => ({ ...t, pos: undefined }))); setDirty(true); setStart(false); }} />
   </div>;
 }

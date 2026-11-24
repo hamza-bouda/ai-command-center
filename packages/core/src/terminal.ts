@@ -27,11 +27,16 @@ export function defaultShell(): { file: string; args: string[] } {
   return { file: process.env.SHELL ?? "/bin/bash", args: ["-l"] };
 }
 
+/** Arguments officiels pour reprendre une session existante dans le terminal interactif (identifiant strictement validé). */
+export function resumeArgs(kind: TerminalKind, sessionId: string): string[] {
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(sessionId)) throw new Error("Identifiant de session invalide.");
+  if (kind === "claude") return ["--resume", sessionId]; if (kind === "codex") return ["resume", sessionId]; throw new Error("Reprise de session impossible dans un shell.");
+}
 export class TerminalManager {
   private terms = new Map<string, Term>();
   constructor(private db: DB, private statusOf: (p: ProviderId) => Promise<ProviderStatus>, private emit: (e: { id: string; data?: string; end?: number; exit?: { code: number | null } }) => void) {}
 
-  async create(o: { kind: TerminalKind; cwd: string; projectId?: string; cols?: number; rows?: number; title?: string }): Promise<TerminalInfo> {
+  async create(o: { kind: TerminalKind; cwd: string; projectId?: string; cols?: number; rows?: number; title?: string; resumeSessionId?: string }): Promise<TerminalInfo> {
     if (!existsSync(o.cwd)) throw new Error(`Dossier introuvable : ${o.cwd}`);
     const exclusive = !!getSetting(this.db, "billing.exclusive", true);
     let file: string, args: string[] = [];
@@ -45,6 +50,7 @@ export class TerminalManager {
       // Option officielle de Codex : certaines installations (app de bureau) exigent de ne pas passer par le démon partagé.
       if (o.kind === "codex" && /--no-daemon/.test(execCapture(file, ["--help"]).out)) args = ["--no-daemon"];
     }
+    if (o.resumeSessionId) args = [...args, ...resumeArgs(o.kind, o.resumeSessionId)];
     const cols = Math.max(20, o.cols ?? 100), rows = Math.max(5, o.rows ?? 30);
     const pty = loadPty().spawn(file, args, { name: "xterm-256color", cols, rows, cwd: o.cwd, env: terminalEnv(exclusive) as any });
     const info: TerminalInfo = { id: uid(), kind: o.kind, title: o.title ?? (o.kind === "claude" ? "Claude Code" : o.kind === "codex" ? "Codex" : "Shell"), cwd: o.cwd, projectId: o.projectId, pid: pty.pid, cols, rows, startedAt: now() };

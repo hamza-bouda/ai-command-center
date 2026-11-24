@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom"; import { ArrowUp, Square, Paperclip, ImagePlus, MonitorUp, Globe, ChevronDown, X, Plug, Sparkles, ImageIcon } from "lucide-react"; import { api } from "../api";
+import { Link } from "react-router-dom"; import { ArrowUp, Square, Paperclip, ImagePlus, MonitorUp, Globe, ChevronDown, X, Plug, Sparkles, ImageIcon, Database } from "lucide-react"; import { api } from "../api";
 import { useData } from "../hooks"; import { StyleSelect } from "./Personalization";
 import { AIModelConfiguration, AIConfig, Mode, PROVIDER_LABEL, effortLabel } from "./AIModelConfiguration";
 
@@ -50,7 +50,14 @@ function QuotaMeter({ provider }: { provider: "claude" | "codex" }) {
 }
 
 /** Pastille de configuration : un seul bouton lisible qui ouvre le panneau fournisseur / modèle / effort / permissions. */
-function ModelPill({ mode, cfg, onChange, disabled, convId, style, onStyle, web, onWeb, gen, onGen }: { mode: Mode; cfg: AIConfig; onChange: (c: AIConfig) => void; disabled?: boolean; convId?: string; style?: string | null; onStyle?: (id: string | null) => void; web?: boolean; onWeb?: (v: boolean) => void; gen?: boolean; onGen?: (v: boolean) => void }) {
+/** Choix de la base de connaissances reliée à la conversation (extraits pertinents ajoutés à chaque message). */
+function KbPicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+  const { data: kbs } = useData<any[]>("kb.list", []); if (!kbs?.length && !value) return null;
+  return <div className="mt-3 pt-3 border-t border-line"><label className="text-[13px] font-medium flex items-center gap-1.5 mb-1.5" htmlFor="kb-pick"><Database size={14} className="text-accent" />Base de connaissances</label>
+    <select id="kb-pick" className="input !h-9" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}><option value="">Aucune</option>{kbs?.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.docs} doc.)</option>)}</select>
+    <span className="text-2xs text-muted block mt-1">Seuls les extraits pertinents (≈ 2 000 tokens au plus) sont ajoutés à chaque message.</span></div>;
+}
+function ModelPill({ mode, cfg, onChange, disabled, convId, style, onStyle, web, onWeb, gen, onGen, kb, onKb }: { mode: Mode; cfg: AIConfig; onChange: (c: AIConfig) => void; disabled?: boolean; convId?: string; style?: string | null; onStyle?: (id: string | null) => void; web?: boolean; onWeb?: (v: boolean) => void; gen?: boolean; onGen?: (v: boolean) => void; kb?: string | null; onKb?: (id: string | null) => void }) {
   const [open, setOpen] = useState(false); const [side, setSide] = useState<{ up: boolean; max: number }>({ up: true, max: 480 }); const ref = useRef<HTMLDivElement>(null); const { data: cat } = useData<any>("ai.catalog", [cfg.provider]);
   useEffect(() => { if (!open) return; const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); }; const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } }; document.addEventListener("mousedown", down); document.addEventListener("keydown", key, true); return () => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key, true); }; }, [open]);
   const model = cfg.model ? cat?.models?.find((m: any) => m.id === cfg.model)?.displayName ?? cfg.model : "Modèle par défaut";
@@ -62,6 +69,7 @@ function ModelPill({ mode, cfg, onChange, disabled, convId, style, onStyle, web,
     {open && <div role="dialog" aria-label="Configuration du modèle" className={`anim-pop absolute left-0 w-[380px] max-w-[88vw] bg-panel border border-line-strong rounded-2xl p-4 z-40 flex flex-col ${side.up ? "bottom-full mb-2" : "top-full mt-2"}`} style={{ boxShadow: "var(--shadow-pop)", maxHeight: side.max }}>
       <div className="flex items-center justify-between mb-3"><span className="font-semibold text-[14px]">Modèle et réglages</span><button className="btn btn-ghost btn-icon !h-7 !w-7" aria-label="Fermer" onClick={() => setOpen(false)}><X size={14} /></button></div>
       <div className="overflow-auto pr-1 -mr-1 flex-1 min-h-0"><AIModelConfiguration mode={mode} value={cfg} onChange={onChange} />{onStyle && <StyleSelect value={style ?? null} onChange={onStyle} />}
+        {onKb && <KbPicker value={kb ?? null} onChange={onKb} />}
         {onGen && <div className="mt-3 pt-3 border-t border-line"><label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" className="w-4 h-4 mt-0.5 accent-[var(--accent)]" checked={!!gen} onChange={(e) => onGen(e.target.checked)} /><span><span className="text-[13px] font-medium flex items-center gap-1.5"><ImageIcon size={14} className="text-accent" />Génération d'images</span><span className="text-2xs text-muted block mt-0.5">Codex peut créer des images avec votre abonnement ChatGPT (sans clé API). Elles comptent dans votre quota ChatGPT. Seul l'outil d'image est ajouté : toujours aucune commande ni fichier.</span></span></label></div>}
         {onWeb && <div className="mt-3 pt-3 border-t border-line"><label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" className="w-4 h-4 mt-0.5 accent-[var(--accent)]" checked={!!web} onChange={(e) => onWeb(e.target.checked)} /><span><span className="text-[13px] font-medium flex items-center gap-1.5"><Globe size={14} className="text-accent" />Recherche web</span><span className="text-2xs text-muted block mt-0.5">Permet au modèle de chercher et de lire des pages sur Internet pour cette conversation. Le Chat n'est alors plus « sans outils » : seuls les outils web sont autorisés. Les pages lues consomment des tokens.</span></span></label></div>}</div></div>}</div>;
 }
@@ -70,9 +78,9 @@ function ModelPill({ mode, cfg, onChange, disabled, convId, style, onStyle, web,
  * Zone de saisie unique pour Chat, Work et Code : texte extensible, pièces jointes, pastille de modèle,
  * bouton d'envoi rond (flèche) ou d'arrêt (carré) pendant la génération.
  */
-export function Composer({ value, onChange, onSend, onStop, busy, sending, placeholder, mode, cfg, onCfg, attachments, images, onAttach, onImage, onRemoveAttach, onRemoveImage, rows = 2, autoFocus, note, canAttach = true, convId, onDropFiles, onPasteImages, onCapture, styleValue, onStyle, webValue, onWeb, genValue, onGen }: {
+export function Composer({ value, onChange, onSend, onStop, busy, sending, placeholder, mode, cfg, onCfg, attachments, images, onAttach, onImage, onRemoveAttach, onRemoveImage, rows = 2, autoFocus, note, canAttach = true, convId, onDropFiles, onPasteImages, onCapture, styleValue, onStyle, webValue, onWeb, genValue, onGen, kbValue, onKb }: {
   value: string; onChange: (v: string) => void; onSend: () => void; onStop?: () => void; busy?: boolean; sending?: boolean; placeholder?: string; mode: Mode; cfg: AIConfig; onCfg: (c: AIConfig) => void;
-  attachments: Attach[]; images: Img[]; onAttach: () => void; onImage: () => void; onRemoveAttach: (i: number) => void; onRemoveImage: (i: number) => void; rows?: number; autoFocus?: boolean; note?: string; canAttach?: boolean; convId?: string; onDropFiles?: (files: File[]) => void; onPasteImages?: (files: File[]) => void; onCapture?: () => void; styleValue?: string | null; onStyle?: (id: string | null) => void; webValue?: boolean; onWeb?: (v: boolean) => void; genValue?: boolean; onGen?: (v: boolean) => void;
+  attachments: Attach[]; images: Img[]; onAttach: () => void; onImage: () => void; onRemoveAttach: (i: number) => void; onRemoveImage: (i: number) => void; rows?: number; autoFocus?: boolean; note?: string; canAttach?: boolean; convId?: string; onDropFiles?: (files: File[]) => void; onPasteImages?: (files: File[]) => void; onCapture?: () => void; styleValue?: string | null; onStyle?: (id: string | null) => void; webValue?: boolean; onWeb?: (v: boolean) => void; genValue?: boolean; onGen?: (v: boolean) => void; kbValue?: string | null; onKb?: (id: string | null) => void;
 }) {
   const ta = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (autoFocus) ta.current?.focus(); }, [autoFocus]);
@@ -92,7 +100,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, sending, place
       {canAttach && <><button type="button" className="btn btn-ghost btn-icon !h-9 !w-9 !rounded-xl" aria-label="Joindre des documents" title="Joindre des documents : PDF, Word, PowerPoint, Excel, HTML, texte, code (convertis en Markdown pour économiser des tokens). Vous pouvez aussi glisser-déposer." disabled={busy} onClick={onAttach}><Paperclip size={17} /></button>
         <button type="button" className="btn btn-ghost btn-icon !h-9 !w-9 !rounded-xl" aria-label="Joindre des images" title="Joindre des images (PNG, JPEG, GIF, WebP — 5 Mo, 4 max)" disabled={busy} onClick={onImage}><ImagePlus size={17} /></button>
         {onCapture && <button type="button" className="btn btn-ghost btn-icon !h-9 !w-9 !rounded-xl" aria-label="Capturer l'écran" title="Capturer l'écran (la fenêtre se masque un instant)" disabled={busy} onClick={onCapture}><MonitorUp size={17} /></button>}</>}
-      <ModelPill mode={mode} cfg={cfg} onChange={onCfg} disabled={busy} convId={convId} style={styleValue} onStyle={onStyle} web={webValue} onWeb={mode === "chat" ? onWeb : undefined} gen={genValue} onGen={mode === "chat" && cfg.provider === "codex" ? onGen : undefined} />
+      <ModelPill mode={mode} cfg={cfg} onChange={onCfg} disabled={busy} convId={convId} style={styleValue} onStyle={onStyle} web={webValue} onWeb={mode === "chat" ? onWeb : undefined} gen={genValue} onGen={mode === "chat" && cfg.provider === "codex" ? onGen : undefined} kb={kbValue} onKb={onKb} />
       <ExtChip mode={mode} convId={convId} disabled={busy} />
       {genValue && mode === "chat" && cfg.provider === "codex" && <span className="inline-flex items-center gap-1 h-7 px-2 rounded-full bg-accent-subtle text-accent text-2xs font-medium shrink-0" title="Génération d'images activée (Codex, abonnement ChatGPT)"><ImageIcon size={12} />Images</span>}
       {webValue && mode === "chat" && <span className="inline-flex items-center gap-1 h-7 px-2 rounded-full bg-accent-subtle text-accent text-2xs font-medium shrink-0" title="Recherche web activée pour cette conversation"><Globe size={12} />Web</span>}

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { NavLink, useLocation, useNavigate, Link } from "react-router-dom";
-import { ShieldCheck, Zap, MessageSquare, Briefcase, Code2, Home, SquareTerminal, LayoutDashboard, FolderGit2, Bot, KanbanSquare, TerminalSquare, BarChart3, Gauge, GitBranch, Bell, Settings as Cog, Workflow, Columns, Puzzle, Activity, PanelLeftClose, PanelLeftOpen, Search, Plus, PanelRight, ChevronRight, Asterisk, Library, Share2, CornerDownLeft, AlertTriangle, RefreshCw } from "lucide-react";
+import { Database, ShieldCheck, Zap, MessageSquare, Briefcase, Code2, Home, SquareTerminal, LayoutDashboard, FolderGit2, Bot, KanbanSquare, TerminalSquare, BarChart3, Gauge, GitBranch, Bell, Settings as Cog, Workflow, Columns, Puzzle, Activity, PanelLeftClose, PanelLeftOpen, Search, Plus, PanelRight, ChevronRight, Asterisk, Library, Share2, CornerDownLeft, AlertTriangle, RefreshCw } from "lucide-react";
 import { useData, useLiveEvents } from "./hooks"; import { useT } from "./i18n"; import { StatusIndicator } from "./ui"; import { ago } from "./api";
 
 export const MODE_ITEMS: [string, string, any][] = [["/chat", "nav.chat", MessageSquare], ["/work", "nav.work", Briefcase], ["/code", "nav.code", Code2]];
 export const CODE_ITEMS: [string, string, any][] = [["/projects", "nav.projects", FolderGit2], ["/agents", "nav.agents", Bot], ["/tasks", "nav.tasks", KanbanSquare], ["/sessions", "nav.sessions", TerminalSquare], ["/orchestrator", "nav.orchestrator", Share2], ["/git", "nav.git", GitBranch], ["/terminal", "nav.terminal", SquareTerminal], ["/quality", "nav.quality", ShieldCheck], ["/workflows", "nav.workflows", Workflow], ["/compare", "nav.compare", Columns]];
-export const COMMON_ITEMS: [string, string, any][] = [["/overview", "nav.overview", LayoutDashboard], ["/analytics", "nav.analytics", BarChart3], ["/quotas", "nav.quotas", Gauge], ["/activity", "nav.activity", Activity], ["/automations", "nav.automations", Zap], ["/notifications", "nav.notifications", Bell], ["/library", "nav.library", Library], ["/mcp", "nav.mcp", Puzzle], ["/settings", "nav.settings", Cog]];
+export const COMMON_ITEMS: [string, string, any][] = [["/overview", "nav.overview", LayoutDashboard], ["/analytics", "nav.analytics", BarChart3], ["/quotas", "nav.quotas", Gauge], ["/activity", "nav.activity", Activity], ["/automations", "nav.automations", Zap], ["/notifications", "nav.notifications", Bell], ["/library", "nav.library", Library], ["/knowledge", "nav.knowledge", Database], ["/mcp", "nav.mcp", Puzzle], ["/settings", "nav.settings", Cog]];
 export const NAV_GROUPS: { label: string; items: [string, string, any][] }[] = [{ label: "nav.modes", items: [["/", "nav.home", Home], ...MODE_ITEMS] }, { label: "nav.code", items: CODE_ITEMS }, { label: "nav.common", items: COMMON_ITEMS }];
 /** Pages qui appartiennent à l'expérience Code (la barre latérale déplie alors ses outils). */
 export const inCodeFamily = (p: string) => ["/code", ...CODE_ITEMS.map((x) => x[0])].some((x) => p === x || p.startsWith(x + "/"));
@@ -50,7 +50,7 @@ function Sidebar({ collapsed, toggle }: { collapsed: boolean; toggle: () => void
         <div className="mt-3 space-y-0.5"><NavLink to="/" end className="nav-item"><Home size={16} className="shrink-0" />{t("nav.home")}</NavLink></div>
         {code && group("code", t("nav.codeTools"), CODE_ITEMS.map((x) => x[0]), true)}
         {group("track", "Suivi", GROUPS[0]!.items, false)}
-        <div className="mt-3 space-y-0.5">{["/library", "/automations", "/notifications", "/mcp"].map(item)}</div></>}
+        <div className="mt-3 space-y-0.5">{["/library", "/knowledge", "/automations", "/notifications", "/mcp"].map(item)}</div></>}
     </nav>
     <div className="border-t border-line p-2.5 min-w-0 shrink-0 space-y-1">
       {!collapsed && item("/settings")}{collapsed && <div className="flex justify-center">{item("/settings")}</div>}

@@ -93,7 +93,7 @@ describe("garde-fou facturation", () => {
 });
 
 describe("migrations", () => {
-  it("idempotentes", () => { const d = openDb(":memory:"); expect(all(d, "SELECT * FROM schema_migrations")).toHaveLength(11); });
+  it("idempotentes", () => { const d = openDb(":memory:"); expect(all(d, "SELECT * FROM schema_migrations")).toHaveLength(12); });
 });
 
 // ---- faux adaptateur pour tester l'ordonnanceur sans consommer l'abonnement

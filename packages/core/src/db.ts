@@ -85,6 +85,10 @@ ALTER TABLE conversations ADD COLUMN ext_disabled TEXT;`,
 `ALTER TABLE conversations ADD COLUMN web INTEGER DEFAULT 0;`,
 `ALTER TABLE conversations ADD COLUMN image INTEGER DEFAULT 0;`,
 `CREATE TABLE user_memories (id TEXT PRIMARY KEY, text TEXT NOT NULL, created_at TEXT NOT NULL);`,
+`CREATE TABLE knowledge_bases (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE knowledge_docs (id TEXT PRIMARY KEY, kb_id TEXT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE, name TEXT NOT NULL, chars INTEGER NOT NULL, created_at TEXT NOT NULL);
+CREATE VIRTUAL TABLE kb_fts USING fts5(text, doc_id UNINDEXED, kb_id UNINDEXED, tokenize='unicode61 remove_diacritics 2');
+ALTER TABLE conversations ADD COLUMN kb_id TEXT;`,
 ];
 
 export const MIGRATION_COUNT = () => MIGRATIONS.length;

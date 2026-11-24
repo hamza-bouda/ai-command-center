@@ -130,7 +130,7 @@ describe("MCP, skills, sauvegarde, routeur", () => {
   it("sauvegarde → restauration : la base restaurée contient l'état sauvegardé, l'ancienne est conservée", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bk-")); const c1 = createCore({ dataDir: dir }); const p = c1.projects.create({ name: "Avant", path: dir }); const file = join(dir, "sauvegarde.sqlite"); c1.system.backup(file); expect(inspectBackup(file)).toMatchObject({ ok: true, projects: 1 });
     c1.projects.create({ name: "Après", path: dir }); expect(c1.projects.list()).toHaveLength(2); c1.system.stageRestore(file); await c1.close(); void p;
-    const c2 = createCore({ dataDir: dir }); expect(c2.restored).toBe(true); expect(c2.projects.list().map((x: any) => x.name)).toEqual(["Avant"]); expect(all(c2.db, "SELECT 1 FROM schema_migrations").length).toBe(11); await c2.close();
+    const c2 = createCore({ dataDir: dir }); expect(c2.restored).toBe(true); expect(c2.projects.list().map((x: any) => x.name)).toEqual(["Avant"]); expect(all(c2.db, "SELECT 1 FROM schema_migrations").length).toBe(12); await c2.close();
     expect(inspectBackup(join(dir, "n-existe-pas.sqlite")).ok).toBe(false); writeFileSync(join(dir, "faux.sqlite"), "pas une base"); expect(inspectBackup(join(dir, "faux.sqlite")).ok).toBe(false);
   });
   it("routeur : recommande l'autre fournisseur quand le premier est limité, sans jamais forcer ; fournisseur indisponible exclu", async () => {

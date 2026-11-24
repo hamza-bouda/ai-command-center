@@ -4,7 +4,7 @@ import ReactFlow, { ReactFlowProvider, Background, BackgroundVariant, Controls, 
 import "reactflow/dist/style.css";
 import { Compass, LayoutTemplate, Server, Layers, Database, ShieldCheck, Rocket, CheckCheck, Bug, Eye, BookOpen, Gauge, Wrench, Palette, PanelLeftClose, PanelLeftOpen, ArrowLeft, Bot, ShieldAlert, FlaskConical, Bell, Crown, Save, Play, LayoutGrid, Wand2, Trash2, AlertTriangle, CheckCircle2, Sparkles, Plus, GitBranch, Loader2, Copy } from "lucide-react";
 import { api } from "../api"; import { useData } from "../hooks"; import { toast, confirmDialog } from "../overlay"; import { Modal, Field } from "../ui";
-import { ROLES } from "../components/NodeListEditor"; import { RunDialog } from "./Workflows"; import { AgentCockpit } from "../components/AgentCockpit";
+import { ROLES } from "../components/NodeListEditor"; import { RunDialog } from "./Workflows"; import { AgentCockpit, AgentPeek, usePeek } from "../components/AgentCockpit";
 import { slugKey, wouldCycle, toPlan, edgesOf, autoLayout, roots, MAX_NODES, type SNode, type Kind } from "../studio/graph";
 
 const errMsg = (e: any) => String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
@@ -21,10 +21,11 @@ const roleLabel = (k: string) => ROLES.find(([r]) => r === k)?.[1] ?? k;
 const ORCH = "__orch";
 
 type Dir = "LR" | "TB";
-interface NData { node: SNode; issues: string[]; dir?: Dir; run?: { status: string; tokens: number } }
+interface NData { node: SNode; issues: string[]; dir?: Dir; run?: { status: string; tokens: number; execId?: string }; onOpen?: (key: string) => void }
 function StudioNode({ data, selected }: NodeProps<NData>) {
-  const n = data.node; const K = styleOf(n.kind, n.role); const I = K.icon; const bad = data.issues.length > 0;
-  return <div className={`w-[208px] rounded-2xl bg-panel transition-all duration-150 ${data.run?.status === "in_progress" ? "node-live" : ""}`} style={{ border: `1.5px solid ${selected ? K.color : bad ? "var(--danger)" : "var(--border-strong)"}`, boxShadow: selected ? `0 0 0 4px color-mix(in srgb, ${K.color} 18%, transparent), var(--shadow-pop)` : "0 6px 20px rgba(0,0,0,.18)" }}>
+  const n = data.node; const K = styleOf(n.kind, n.role); const I = K.icon; const bad = data.issues.length > 0; const peek = usePeek();
+  return <div {...peek.hover} className={`w-[208px] rounded-2xl bg-panel transition-all duration-150 ${data.run?.status === "in_progress" ? "node-live" : ""}`} style={{ border: `1.5px solid ${selected ? K.color : bad ? "var(--danger)" : "var(--border-strong)"}`, boxShadow: selected ? `0 0 0 4px color-mix(in srgb, ${K.color} 18%, transparent), var(--shadow-pop)` : "0 6px 20px rgba(0,0,0,.18)" }}>
+    {data.run?.execId && <AgentPeek show={peek.show} pos={peek.pos} hover={peek.hover} execId={data.run.execId} title={n.title} onOpen={() => { peek.hide(); data.onOpen?.(n.key); }} />}
     <Handle type="target" position={data.dir === "TB" ? Position.Top : Position.Left} className="!w-3 !h-3 !border-2 !bg-panel" style={{ borderColor: K.color, ...(data.dir === "TB" ? { top: -7 } : { left: -7 }) }} />
     <div className="h-1.5 rounded-t-2xl" style={{ background: `linear-gradient(90deg, ${K.color}, color-mix(in srgb, ${K.color} 25%, transparent))` }} />
     <div className="p-3"><div className="flex items-center gap-2 mb-1.5"><span className="w-7 h-7 rounded-lg grid place-items-center shrink-0" style={{ background: `color-mix(in srgb, ${K.color} 16%, transparent)`, color: K.color }}><I size={15} /></span>
@@ -78,7 +79,7 @@ function StudioInner() {
 
   // suivi d'une exécution : l'état de chaque tâche s'affiche sur le nœud de même clé
   useEffect(() => { if (!runId) { setNodes((ns) => ns.map((n) => (n.id === ORCH || !(n.data as NData).run ? n : { ...n, data: { ...(n.data as NData), run: undefined } }))); return; }
-    const by = new Map((runTasks ?? []).map((t: any) => [t.node_key, t])); setNodes((ns) => ns.map((n) => { if (n.id === ORCH) return n; const t: any = by.get(n.id); const d = n.data as NData; const run = t ? { status: t.status, tokens: t.tokens ?? 0 } : undefined; return JSON.stringify(run) === JSON.stringify(d.run) ? n : { ...n, data: { ...d, run } }; })); }, [runId, runTasks]);
+    const by = new Map((runTasks ?? []).map((t: any) => [t.node_key, t])); setNodes((ns) => ns.map((n) => { if (n.id === ORCH) return n; const t: any = by.get(n.id); const d = n.data as NData; const run = t ? { status: t.status, tokens: t.tokens ?? 0, execId: t.execution_id ?? undefined } : undefined; return JSON.stringify(run) === JSON.stringify(d.run) && d.onOpen ? n : { ...n, data: { ...d, run, onOpen: (k: string) => setSel(k) } }; })); }, [runId, runTasks]);
   const patch = (key: string, p: Partial<SNode>) => { setNodes((ns) => ns.map((n) => (n.id === key ? { ...n, data: { ...(n.data as NData), node: { ...(n.data as NData).node, ...p } } } : n))); setDirty(true); };
   const add = (kind: Kind, role = "fullstack", at?: { x: number; y: number }) => {
     if (steps.length >= MAX_NODES) { toast(`${MAX_NODES} étapes au maximum par workflow.`, "error"); return; }
@@ -136,7 +137,7 @@ function StudioInner() {
           : selNode ? <Inspector node={selNode} incoming={incoming} onPatch={(p) => patch(selNode.key, p)} onDelete={() => remove(selNode.key)} /> : null}</aside>}
     </div>
     <RunDialog wf={runWf} onClose={() => setRunWf(undefined)} onLaunched={(oid) => { setRunId(oid); setSel(null); }} />
-    <AgentCockpit task={cockpitTask} orch={runOrch ?? { project_id: "" }} handoffs={runHs ?? []} onClose={() => setSel(null)} onChanged={reloadRun} />
+    <AgentCockpit task={cockpitTask} orch={runOrch ?? { project_id: "" }} handoffs={runHs ?? []} onClose={() => { setSel(null); setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n))); }} onChanged={reloadRun} />
     <ProposeDialog open={propose} onClose={() => setPropose(false)} hasNodes={steps.length > 0} onPlan={(tasks) => { load(tasks.map((t) => ({ ...t, pos: undefined }))); setDirty(true); setStart(false); }} />
   </div>;
 }

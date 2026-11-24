@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { NodeToolbar, Position } from "reactflow";
 import { Square, RotateCcw, ExternalLink, SquareTerminal, FileText, ArrowDownToLine, ArrowUpFromLine, Clock, Coins } from "lucide-react";
 import { api, fmt, usd } from "../api"; import { useData } from "../hooks"; import { toast, confirmDialog } from "../overlay";
 import { Drawer, Tabs, StatusIndicator, Badge } from "../ui"; import { Md, ToolCallBlock } from "../pages/Sessions"; import { RichScope } from "./RichBlocks"; import { logBlocks } from "./ConversationParts";
@@ -38,6 +39,23 @@ export function AgentTerminal({ execId, title, tail, height = 360 }: { execId: s
         : l.kind === "file" ? <div key={l.id} className="text-[#86efac] break-all">+ {l.text}</div> : l.kind === "err" ? <div key={l.id} className="text-[#fca5a5] whitespace-pre-wrap">{l.text}</div>
         : l.kind === "dim" ? <div key={l.id} className="text-[#7d7a73] break-all"># {l.text}</div> : <div key={l.id} className="whitespace-pre-wrap break-words my-1">{l.text}</div>)}
       {live && <span className="inline-block w-2 h-3.5 bg-[#e8e6e1] align-middle animate-pulse" aria-hidden />}</div></div>;
+}
+
+/** Aperçu au survol : tant que le curseur est sur l'agent (ou sur l'aperçu), un mini-terminal en direct s'affiche au-dessus ; un clic dessus ouvre le cockpit latéral. */
+export function usePeek() {
+  const [show, setShow] = useState(false); const [pos, setPos] = useState<"top" | "bottom">("top"); const t = useRef<any>(); const node = useRef<HTMLElement | null>(null);
+  const on = (e?: any) => { clearTimeout(t.current); const el0 = e?.currentTarget as HTMLElement | undefined; const el = el0 && !el0.closest(".react-flow__node-toolbar") ? el0 : undefined; /* l'aperçu lui-même ne repositionne rien */ if (el) node.current = el; const box = el?.closest(".react-flow") as HTMLElement | null; if (el && box) setPos(el.getBoundingClientRect().top - box.getBoundingClientRect().top < 240 ? "bottom" : "top"); t.current = setTimeout(() => setShow(true), 180); };
+  const off = () => { clearTimeout(t.current); t.current = setTimeout(() => setShow(false), 260); };
+  const hide = () => { clearTimeout(t.current); setShow(false); };
+  // Filet de sécurité : si un panneau recouvre l'agent, « mouseleave » n'arrive pas ; on ferme dès que le curseur n'est ni sur l'agent ni sur l'aperçu, ou sur Échap.
+  useEffect(() => { if (!show) return; const mv = (e: MouseEvent) => { const el = e.target as Element | null; if (!el) return; if (node.current?.contains(el) || el.closest?.(".react-flow__node-toolbar")) return; hide(); }; const key = (e: KeyboardEvent) => { if (e.key === "Escape") hide(); }; document.addEventListener("mousemove", mv); document.addEventListener("keydown", key); return () => { document.removeEventListener("mousemove", mv); document.removeEventListener("keydown", key); }; }, [show]);
+  useEffect(() => () => clearTimeout(t.current), []);
+  return { show, pos, hide, hover: { onMouseEnter: on as () => void, onMouseLeave: off } };
+}
+export function AgentPeek({ show, pos = "top", hover, execId, title, onOpen }: { show: boolean; pos?: "top" | "bottom"; hover: { onMouseEnter: () => void; onMouseLeave: () => void }; execId?: string; title: string; onOpen: () => void }) {
+  if (!execId) return null;
+  return <NodeToolbar isVisible={show} position={pos === "top" ? Position.Top : Position.Bottom} offset={12}><div {...hover} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onOpen(); }} role="button" tabIndex={0} aria-label={`Ouvrir le cockpit de ${title}`} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }} className="w-[340px] cursor-pointer anim-pop group/peek">
+    <AgentTerminal execId={execId} title={title} tail={7} height={176} /><div className="mt-1 text-center text-2xs text-muted opacity-0 group-hover/peek:opacity-100 transition-opacity">Cliquer pour ouvrir le cockpit</div></div></NodeToolbar>;
 }
 
 /** Cockpit d'une étape : terminal, interface (conversation), contexte reçu et transmis, résultat — avec actions. */

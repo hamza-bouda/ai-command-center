@@ -86,6 +86,8 @@ function Pane(p: PaneProps) {
       inst.term.attachCustomKeyEventHandler((e) => {
         if (e.type !== "keydown") return true; const mod = e.ctrlKey || e.metaKey;
         if (e.altKey && !mod && /^[1-6]$/.test(e.key)) { cb.current.onFocusSlot(Number(e.key) - 1); return false; }
+        if (mod && e.key.toLowerCase() === "k" && !e.shiftKey) return false; // Ctrl+K : palette de l'application (laissé passer, jamais envoyé au shell)
+        if (e.altKey && !mod && e.key === "0") { inst.term.blur(); (document.activeElement as HTMLElement | null)?.blur(); return false; } // Alt+0 : sortir du terminal (le clavier revient à l'application)
         if (mod && e.key.toLowerCase() === "f" && !e.shiftKey) { cb.current.onSearch(); return false; }
         if (mod && e.key.toLowerCase() === "c" && (e.shiftKey || inst.term.hasSelection())) { if (inst.term.hasSelection()) { void navigator.clipboard.writeText(inst.term.getSelection()); inst.term.clearSelection(); } return false; } // Ctrl+C sans sélection = interruption
         if (mod && e.shiftKey && e.key.toLowerCase() === "v") { e.preventDefault(); void pasteSafe(inst); return false; }

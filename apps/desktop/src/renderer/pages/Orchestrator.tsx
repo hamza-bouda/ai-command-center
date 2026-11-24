@@ -5,7 +5,7 @@ import "reactflow/dist/style.css";
 import ReactMarkdown from "react-markdown"; import remarkGfm from "remark-gfm";
 import { Share2, Plus, Play, RotateCcw, Square, ExternalLink, ShieldAlert, Trash2, CheckCircle2, AlertTriangle, ArrowRight, Wand2 } from "lucide-react";
 import { useData } from "../hooks"; import { useT } from "../i18n"; import { fmt, usd, dur, ago, api } from "../api"; import { toast, confirmDialog } from "../overlay";
-import { AgentCockpit, AgentWall } from "../components/AgentCockpit";
+import { AgentCockpit, AgentWall, AgentPeek, usePeek } from "../components/AgentCockpit";
 import { NodeListEditor, PNode } from "../components/NodeListEditor"; import { Page, Card, Modal, Drawer, Field, EmptyState, ErrorState, LoadingSkeleton, Badge, StatusIndicator, Tabs, Segmented, Disclaimer } from "../ui";
 
 const MAP: Record<string, string> = { backlog: "draft", todo: "queued", in_progress: "running", review: "waiting", done: "completed", blocked: "blocked" };
@@ -15,7 +15,9 @@ const ROLES: [string, string][] = [["architect", "Architecte"], ["frontend", "Fr
 const MODES: [string, string, string][] = [["assisted", "Assisté", "L'IA propose un plan, vous le relisez et l'approuvez. Recommandé."], ["manual", "Manuel", "Vous construisez le plan vous-même."], ["auto", "Automatique", "Plan lancé sans relecture ; approbation demandée avant chaque étape qui écrit."]];
 
 function TaskNode({ data, selected }: NodeProps) {
-  return <div className={`w-[250px] rounded-xl border bg-panel p-3 text-left ${data.status === "in_progress" ? "node-live" : ""} ${selected ? "border-accent" : data.gate ? "border-[rgba(251,191,36,.5)]" : "border-line-strong"}`} style={{ boxShadow: "0 4px 18px rgba(0,0,0,.4)" }}>
+  const peek = usePeek();
+  return <div {...peek.hover} className={`w-[250px] rounded-xl border bg-panel p-3 text-left ${data.status === "in_progress" ? "node-live" : ""} ${selected ? "border-accent" : data.gate ? "border-[rgba(251,191,36,.5)]" : "border-line-strong"}`} style={{ boxShadow: "0 4px 18px rgba(0,0,0,.4)" }}>
+    {data.execId && <AgentPeek show={peek.show} pos={peek.pos} hover={peek.hover} execId={data.execId} title={data.title} onOpen={() => { peek.hide(); data.onOpen?.(data.taskId); }} />}
     <Handle type="target" position={Position.Left} className="!bg-line-strong !border-0 !w-2 !h-2" />
     <div className="flex items-center justify-between mb-2"><StatusIndicator status={data.gate ? "waiting_approval" : MAP[data.status] ?? "idle"} label={data.gate ? "Approbation" : LABEL[data.status]} size="sm" />{data.provider && <Badge v={data.provider} />}</div>
     <div className="text-[13px] font-medium leading-snug line-clamp-2 mb-2">{data.title}</div>
@@ -64,7 +66,7 @@ function Detail({ orch, reload }: { orch: any; reload: () => void }) {
   const [os, ol] = OSTATUS[orch.status] ?? ["draft", orch.status]; const editable = ["draft", "awaiting_approval"].includes(orch.status); const pending = (gates ?? []).filter((g) => g.status === "pending");
   const { nodes, edges } = useMemo(() => {
     const list = tasks ?? []; const es: any[] = list.flatMap((t) => (t.deps ? String(t.deps).split(",") : []).map((d: string) => ({ task_id: t.id, depends_on: d }))); const pos = layout(list, es);
-    return { nodes: list.map((t): Node => ({ id: t.id, type: "task", position: pos.get(t.id) ?? { x: 0, y: 0 }, data: { title: t.title, status: t.status, role: t.role, kind: t.node_kind, provider: t.provider, tokens: t.tokens, duration: t.duration_ms, gate: pending.some((g) => g.task_id === t.id) } })),
+    return { nodes: list.map((t): Node => ({ id: t.id, type: "task", position: pos.get(t.id) ?? { x: 0, y: 0 }, data: { taskId: t.id, execId: t.execution_id, onOpen: setSel, title: t.title, status: t.status, role: t.role, kind: t.node_kind, provider: t.provider, tokens: t.tokens, duration: t.duration_ms, gate: pending.some((g) => g.task_id === t.id) } })),
       edges: es.map((e): Edge => ({ id: `${e.depends_on}-${e.task_id}`, source: e.depends_on, target: e.task_id, type: "smoothstep", animated: list.find((x) => x.id === e.depends_on)?.status === "in_progress", markerEnd: { type: MarkerType.ArrowClosed, color: "#3a3a44" }, style: { stroke: "#3a3a44", strokeWidth: 1.5 } })) };
   }, [tasks, gates]);
   const done = (tasks ?? []).filter((t) => t.status === "done").length; const cur = (tasks ?? []).find((t) => t.id === sel);

@@ -386,6 +386,7 @@ export const EN_MAP: Record<string, string> = {
  "Claude Code non détecté.": "Claude Code not detected.",
  "Claude et Codex analysent indépendamment, puis synthèse comparée.": "Claude and Codex analyze independently, then a comparative summary follows.",
  "Claude et Codex sur la période": "Claude and Codex over the period",
+ "Cliquer pour ouvrir le cockpit": "Click to open the cockpit",
  "Cliquez une étape pour ouvrir son cockpit (terminal, interface, contexte).": "Click a step to open its cockpit (terminal, interface, context).",
  "Clé": "Key",
  "Clé API": "API key",

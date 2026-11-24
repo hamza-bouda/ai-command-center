@@ -96,6 +96,7 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
     "onboarding.finish": () => { c.settings.set("onboarding.done", true); return true; },
     "conv.setWeb": (id: string, on: unknown) => c.conversations.setWeb(String(id), !!on),
     "conv.setImage": (id: string, on: unknown) => c.conversations.setImage(String(id), !!on),
+    "memory.list": () => ({ items: c.userMemory.list(), enabled: c.userMemory.enabled(), tokens: c.userMemory.tokens() }), "memory.add": (t: unknown) => c.userMemory.add(String(t ?? "")), "memory.remove": (id: unknown) => { c.userMemory.remove(String(id)); return true; }, "memory.clear": () => { c.userMemory.clear(); return true; }, "memory.setEnabled": (on: unknown) => { c.userMemory.setEnabled(!!on); return true; },
     "profile.get": () => c.profile.get(), "profile.save": (p: any) => c.profile.save({ about: p?.about, howto: p?.howto, defaultStyle: p?.defaultStyle }),
     "style.list": () => c.profile.list(), "style.saveCustom": (list: any) => c.profile.saveCustom(Array.isArray(list) ? list : []), "conv.setStyle": (id: string, style: string | null) => c.conversations.setStyle(String(id), style ? String(style) : null),
     "doc.status": () => c.converter.status(), "doc.install": () => c.converter.install(),

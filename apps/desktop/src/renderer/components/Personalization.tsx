@@ -16,6 +16,17 @@ export function StyleSelect({ value, onChange }: { value: string | null; onChang
 }
 
 /** Paramètres › Personnalisation : ce que l'IA doit savoir de vous, comment répondre, styles. */
+/** Souvenirs retenus à la demande de l'utilisateur : visibles, supprimables, désactivables ; leur coût en tokens est affiché. */
+function MemoryCard() {
+  const { data, reload } = useData<any>("memory.list", []); const [text, setText] = useState(""); const items: { id: string; text: string }[] = data?.items ?? [];
+  const add = async () => { try { await api("memory.add", text); setText(""); reload(); } catch (e: any) { toast(errMsg(e), "error"); } };
+  return <Card title="Mémoire" sub="Ce que l'IA a retenu de vous, uniquement avec votre accord" className="mb-4">
+    <label className="flex items-center gap-2.5 text-[13px] mb-3 cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-[var(--accent)]" checked={data?.enabled !== false} onChange={async (e) => { await api("memory.setEnabled", e.target.checked); reload(); }} />Utiliser la mémoire (et laisser l'IA proposer des souvenirs)</label>
+    {items.length === 0 ? <p className="text-xs text-muted mb-3">Aucun souvenir. L'IA peut en proposer pendant une conversation : rien n'est enregistré sans votre clic sur « Retenir ».</p>
+      : <ul className="divide-y divide-line mb-3">{items.map((m) => <li key={m.id} className="py-2 flex items-start gap-3"><span className="text-[13px] flex-1 min-w-0">{m.text}</span><button className="btn btn-ghost btn-icon !h-7 !w-7" aria-label={`Oublier : ${m.text.slice(0, 40)}`} onClick={async () => { await api("memory.remove", m.id); reload(); }}><Trash2 size={13} /></button></li>)}</ul>}
+    <div className="flex gap-2"><input className="input" maxLength={280} placeholder="Ajouter un souvenir à la main" aria-label="Nouveau souvenir" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && text.trim().length >= 3) void add(); }} /><button className="btn" disabled={text.trim().length < 3} onClick={() => void add()}><Plus size={14} />Ajouter</button></div>
+    <p className="text-xs text-muted mt-2 tnum">{items.length} souvenir(s) · ≈ {data?.tokens ?? 0} tokens ajoutés à chaque message{items.length > 0 && <> · <button className="text-accent hover:underline" onClick={async () => { if (await confirmDialog({ title: "Tout oublier ?", body: "Tous les souvenirs seront supprimés.", confirmLabel: "Tout oublier", danger: true })) { await api("memory.clear"); reload(); } }}>Tout oublier</button></>}</p></Card>;
+}
 export function PersonalizationTab() {
   const { data: prof, reload } = useData<any>("profile.get", []); const { data: styles, reload: rs } = useData<Style[]>("style.list", []);
   const [about, setAbout] = useState(""); const [howto, setHowto] = useState(""); const [dirty, setDirty] = useState(false); const [edit, setEdit] = useState<Style | null>(null); const [isNew, setIsNew] = useState(false); const [err, setErr] = useState("");
@@ -28,6 +39,7 @@ export function PersonalizationTab() {
     <Card title="Ce que l'IA doit savoir de vous" className="mb-4"><Field label="À propos de vous" hint="Métier, projets, langue préférée… Ajouté à chaque message, dans tous les modes."><textarea className="input" rows={3} maxLength={1000} value={about} onChange={(e) => { setAbout(e.target.value); setDirty(true); }} placeholder="Ex. Je suis développeuse web, je travaille surtout en TypeScript." /></Field>
       <Field label="Manière de répondre" hint="Consignes générales : longueur, format, ton…"><textarea className="input" rows={3} maxLength={1000} value={howto} onChange={(e) => { setHowto(e.target.value); setDirty(true); }} placeholder="Ex. Réponds en français, avec des exemples de code commentés." /></Field>
       <div className="flex items-center gap-3 flex-wrap"><button className="btn btn-primary" disabled={!dirty} onClick={save}>Enregistrer</button><span className="text-xs text-muted tnum">{about.length + howto.length} caractères · ≈ {cost} tokens ajoutés à chaque message{cost === 0 ? " (rien n'est ajouté tant que ces champs sont vides)" : ""}</span></div></Card>
+    <MemoryCard />
     <Card title="Style par défaut" className="mb-4"><select className="input !w-64" aria-label="Style par défaut" value={prof?.defaultStyle ?? ""} onChange={async (e) => { try { await api("profile.save", { defaultStyle: e.target.value }); reload(); toast("Style par défaut enregistré.", "success"); } catch (x: any) { toast(errMsg(x), "error"); } }}><option value="">Aucun style</option>{styles?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
       <p className="text-xs text-muted mt-2">Appliqué aux nouvelles conversations. Chaque conversation peut choisir le sien depuis la fenêtre du modèle (sous la zone de saisie).</p></Card>
     <Card title="Styles" className="mb-4">

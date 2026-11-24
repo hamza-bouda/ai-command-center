@@ -25,7 +25,7 @@ function ParentLink({ id, mode }: { id: string; mode: Mode }) {
   const { data: parent } = useData<any>("conv.get", [id]); if (!parent) return null;
   return <div className="mb-4 flex items-center gap-2 text-xs text-muted"><GitBranch size={13} className="text-accent" />Branche créée en modifiant un message de <button className="text-accent hover:underline truncate max-w-[280px]" onClick={() => { window.location.hash = `/${mode === "code" ? "code" : "chat"}?open=${id}`; }}>« {String(parent.title).replace(/ \(modifié\)$/, "")} »</button></div>;
 }
-const RICH_LABEL: Record<string, string> = { quiz: "QCM", qcm: "QCM", choices: "Choix", chart: "Graphique", mermaid: "Diagramme", artifact: "Aperçu HTML", svg: "Image SVG" };
+const RICH_LABEL: Record<string, string> = { quiz: "QCM", qcm: "QCM", choices: "Choix", chart: "Graphique", mermaid: "Diagramme", artifact: "Aperçu HTML", svg: "Image SVG", image: "Image", memory: "Mémoire" };
 /** Aperçu d'une conversation : les blocs enrichis (JSON, HTML) sont remplacés par leur nom au lieu d'afficher le code brut. */
 const cleanPreview = (p: unknown) => String(p).replace(/```(\w+)[\s\S]*?(```|$)/g, (_m, l: string) => (RICH_LABEL[l] ? `[${RICH_LABEL[l]}]` : "[code]")).replace(/\s+/g, " ").trim().slice(0, 60);
 export function ConversationList({ mode, selected, onSelect, onNew, projectId, newLabel = "Nouveau chat", emptyHint }: { mode: Mode; selected?: string; onSelect: (id: string) => void; onNew: () => void; projectId?: string; newLabel?: string; emptyHint?: string }) {

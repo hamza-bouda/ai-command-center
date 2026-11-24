@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, Copy, CheckCircle2, XCircle, RotateCcw, MessageSquareText, Maximize2, Download, Code2, Eye, Loader2, ListChecks, BarChart3, GitBranch, ChevronLeft, ChevronRight, Send } from "lucide-react";
+import { Check, Copy, CheckCircle2, XCircle, RotateCcw, MessageSquareText, Maximize2, Download, Code2, Eye, Brain, Loader2, ListChecks, BarChart3, GitBranch, ChevronLeft, ChevronRight, Send } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { currentTheme } from "../theme"; import { api } from "../api"; import { toast } from "../overlay"; import { Modal } from "../ui";
 
@@ -138,6 +138,16 @@ function ArtifactView({ code, kind }: { code: string; kind: "html" | "svg" }) {
     <Modal open={full} onClose={() => setFull(false)} width="max-w-5xl" title={kind === "svg" ? "Image SVG" : "Aperçu HTML"}><div className="-m-1">{frame("70vh")}</div></Modal></Shell>;
 }
 
+/** Souvenirs proposés par l'IA : rien n'est enregistré sans un clic de l'utilisateur sur « Retenir ». */
+function MemoryBlock({ raw }: { raw: string }) {
+  const { streaming } = useContext(RichScope); const [done, setDone] = useState<Record<number, "ok" | "dup">>({}); const p = parse(raw);
+  if (!p.ok) return streaming ? <Pending what="la proposition" /> : errBox("Mémoire", raw, p.e);
+  const items: string[] = (Array.isArray(p.v?.items) ? p.v.items : typeof p.v?.text === "string" ? [p.v.text] : []).filter((x: unknown) => typeof x === "string" && x.trim()).map((x: string) => x.trim().slice(0, 280)).slice(0, 5);
+  if (!items.length) return errBox("Mémoire", raw, "aucun souvenir");
+  const keep = async (i: number) => { try { const r = await api("memory.add", items[i]); setDone((d) => ({ ...d, [i]: r.duplicate ? "dup" : "ok" })); if (!r.duplicate) toast("Souvenir enregistré (modifiable dans Paramètres › Personnalisation).", "success"); } catch (e: any) { toast(String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ""), "error"); } };
+  return <div className="my-4 rounded-2xl border border-line bg-panel/60 not-prose overflow-hidden"><div className="px-4 py-2 border-b border-line text-xs font-medium text-fg2 flex items-center gap-2"><Brain size={14} className="text-accent" />Retenir pour plus tard ?</div>
+    <ul className="divide-y divide-line">{items.map((t, i) => <li key={i} className="px-4 py-2.5 flex items-center gap-3"><span className="text-[13px] flex-1 min-w-0">{t}</span>{done[i] ? <span className="text-xs text-success inline-flex items-center gap-1 shrink-0"><Check size={13} />{done[i] === "dup" ? "Déjà retenu" : "Retenu"}</span> : <button className="btn btn-sm shrink-0" onClick={() => void keep(i)}>Retenir</button>}</li>)}</ul></div>;
+}
 /** Image générée par Codex (abonnement ChatGPT), enregistrée dans le dossier de l'application et servie par le protocole local `acc-image`. */
 function ImageBlock({ raw }: { raw: string }) {
   const { streaming } = useContext(RichScope); const [big, setBig] = useState(false); const [bad, setBad] = useState(false);
@@ -152,11 +162,11 @@ function ImageBlock({ raw }: { raw: string }) {
     <Modal open={big} onClose={() => setBig(false)} width="max-w-4xl" title="Image générée" footer={<button className="btn" onClick={save}><Download size={14} />Enregistrer</button>}><img src={src} alt={alt} className="max-w-full max-h-[70vh] mx-auto rounded-xl" /></Modal></figure>;
 }
 /** Langages de blocs de code rendus de façon interactive. ```artifact = page HTML complète exécutée dans un cadre isolé (```html reste du code affiché tel quel). */
-export const RICH_LANGS = new Set(["image", "quiz", "qcm", "choices", "chart", "mermaid", "artifact", "svg", "html"]);
+export const RICH_LANGS = new Set(["memory", "image", "quiz", "qcm", "choices", "chart", "mermaid", "artifact", "svg", "html"]);
 export function richBlock(lang: string, code: string): ReactNode | null {
   switch (lang) {
     case "quiz": case "qcm": return <QuizBlock raw={code} />; case "choices": return <ChoicesBlock raw={code} />; case "chart": return <ChartBlock raw={code} />; case "mermaid": return <MermaidBlock code={code} />;
-    case "image": return <ImageBlock raw={code} />;
+    case "image": return <ImageBlock raw={code} />; case "memory": return <MemoryBlock raw={code} />;
     case "artifact": return <ArtifactBlock code={code} kind="html" />; case "html": return /^\s*(<!doctype html|<html[\s>])/i.test(code) ? <ArtifactBlock code={code} kind="html" /> : null;
     case "svg": return /<\s*svg/i.test(code) ? <ArtifactBlock code={code} kind="svg" /> : null; default: return null;
   }

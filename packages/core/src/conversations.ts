@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { DB, all, one, run, uid, now, tx } from "./db.js";
 import type { EventBus } from "./events.js";
-import { getSetting } from "./settings.js"; import type { Profile } from "./profile.js";
+import { getSetting } from "./settings.js"; import type { Profile } from "./profile.js"; import { MEMORY_PROMPT, type UserMemory } from "./usermemory.js";
 import type { ExecutionManager } from "./execution.js";
 import type { AICatalog } from "./catalog.js";
 import type { ProviderId } from "./types.js";
@@ -30,7 +30,7 @@ const CONTEXT_MAX = 6000;
 
 /** Conversations indépendantes par mode (chat / work / code) : historique, configuration appliquée, reprise ou nouvelle session explicite. */
 export class Conversations {
-  constructor(private db: DB, private bus: EventBus, private exec: ExecutionManager, private catalog: AICatalog, private dataDir: string, private workDir: (workId: string) => string | undefined, private ext?: Extensions, private profile?: Profile) {
+  constructor(private db: DB, private bus: EventBus, private exec: ExecutionManager, private catalog: AICatalog, private dataDir: string, private workDir: (workId: string) => string | undefined, private ext?: Extensions, private profile?: Profile, private userMemory?: UserMemory) {
     bus.on((e) => { if (e.executionId && /^execution\.(completed|failed|cancelled|interrupted)$/.test(e.type)) { const id = e.executionId; const st = e.type.split(".")[1]!; setImmediate(() => this.onExecutionEnd(id, st)); } });
   }
   private sandbox() { const d = join(this.dataDir, "chat-sandbox"); mkdirSync(d, { recursive: true }); return d; }
@@ -65,7 +65,7 @@ export class Conversations {
   /** Invite système du mode ; en Chat, les outils MCP explicitement activés sont annoncés (sinon le modèle croit n'avoir aucun outil). */
   /** Invite système du mode + (si activé dans les Paramètres) la description des blocs riches que l'interface sait afficher. */
   private systemPromptFor(mode: ExperienceMode, mcpNames: string[], style?: string | null, web = false, image?: boolean): string | undefined {
-    const parts = [this.baseSystemPrompt(mode, mcpNames, web), this.profile?.textFor(style), mode !== "chat" ? "" : image ? "Tu peux générer des images avec l'outil de génération d'image intégré (aucune commande, aucun script, aucune clé API). L'image est affichée automatiquement dans la conversation : ne donne pas de chemin de fichier. Décris brièvement ce que tu as généré." : "Tu ne peux pas générer d'images dans cette conversation : n'en prétends jamais avoir produit et propose à l'utilisateur d'activer la génération d'images dans la fenêtre du modèle (Codex).", getSetting<boolean>(this.db, "ui.richBlocks", true) === false ? "" : RICH_PROMPT].filter(Boolean) as string[];
+    const parts = [this.baseSystemPrompt(mode, mcpNames, web), this.profile?.textFor(style), this.userMemory?.textFor(), mode !== "chat" ? "" : image ? "Tu peux générer des images avec l'outil de génération d'image intégré (aucune commande, aucun script, aucune clé API). L'image est affichée automatiquement dans la conversation : ne donne pas de chemin de fichier. Décris brièvement ce que tu as généré." : "Tu ne peux pas générer d'images dans cette conversation : n'en prétends jamais avoir produit et propose à l'utilisateur d'activer la génération d'images dans la fenêtre du modèle (Codex).", getSetting<boolean>(this.db, "ui.richBlocks", true) === false ? "" : RICH_PROMPT + (this.userMemory?.enabled() ? String.fromCharCode(10) + MEMORY_PROMPT : "")].filter(Boolean) as string[];
     return parts.length ? parts.join("\n\n") : undefined;
   }
   /** Recherche web en Chat : opt-in par conversation (le Chat n'a sinon aucun outil). Work et Code ont déjà leurs propres outils. */

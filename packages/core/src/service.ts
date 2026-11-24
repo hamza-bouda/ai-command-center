@@ -16,7 +16,7 @@ import { Works } from "./works.js";
 import { describePolicy, policyFor, EXPERIENCE_MODES, type ExperienceMode } from "./policies.js";
 import { Quality, CHECK_KINDS, type CheckKind } from "./quality.js";
 import { Automations } from "./automations.js";
-import { Extensions } from "./extensions.js"; import { Profile } from "./profile.js"; import { Library } from "./library.js"; import { DocConverter } from "./convert.js";
+import { Extensions } from "./extensions.js"; import { Profile } from "./profile.js"; import { UserMemory } from "./usermemory.js"; import { Library } from "./library.js"; import { DocConverter } from "./convert.js";
 import { Workflows } from "./workflows.js";
 import { Comparisons } from "./comparison.js";
 import { ProjectMemory, listMcpCached, listSkills, backupTo, autoBackup, inspectBackup as inspectBackupRaw, stageRestore, applyPendingRestore } from "./system.js";
@@ -48,8 +48,8 @@ export function createCore(opts: { dataDir: string; dbFile?: string; adapters?: 
   const orchestrator = new Orchestrator(db, bus, exec, (p) => providerStatus(p)); orchestrator.reconcile();
   const catalog = new AICatalog(db, adapters, (p) => providerStatus(p));
   let worksRef: Works | undefined;
-  const extensions = new Extensions(db); const profile = new Profile(db, (k, v) => setSetting(db, k, v)); const library = new Library(db); const converter = new DocConverter(opts.dataDir, bus);
-  const conversations = new Conversations(db, bus, exec, catalog, opts.dataDir, (id) => (id ? worksRef?.dirOf(id) : undefined), extensions, profile);
+  const extensions = new Extensions(db); const profile = new Profile(db, (k, v) => setSetting(db, k, v)); const userMemory = new UserMemory(db, (k, v) => setSetting(db, k, v)); const library = new Library(db); const converter = new DocConverter(opts.dataDir, bus);
+  const conversations = new Conversations(db, bus, exec, catalog, opts.dataDir, (id) => (id ? worksRef?.dirOf(id) : undefined), extensions, profile, userMemory);
   const works = (worksRef = new Works(db, conversations, opts.dataDir));
   bus.on((e) => { if (e.type === "conversation.message") { const w = one<any>(db, "SELECT id FROM works WHERE conversation_id=?", String(e.payload.id)); if (w) works.syncDeliverables(w.id); } });
   const workflows = new Workflows(db, orchestrator); const comparisons = new Comparisons(db, bus, exec, catalog, join(opts.dataDir, "chat-sandbox")); const memory = new ProjectMemory(db);
@@ -90,7 +90,7 @@ export function createCore(opts: { dataDir: string; dbFile?: string; adapters?: 
     quotaCache.set(p, { at: Date.now(), q }); return q;
   };
   return {
-    db, bus, exec, recovered, terminals, orchestrator, conversations, works, workflows, comparisons, memory, restored, quality, automations, extensions, converter, profile, library,
+    db, bus, exec, recovered, terminals, orchestrator, conversations, works, workflows, comparisons, memory, restored, quality, automations, extensions, converter, profile, userMemory, library,
     system: { mcp: (force?: boolean) => listMcpCached(!!force), skills: () => listSkills(), backup: (file: string) => backupTo(db, file), autoBackup: () => dbFile === ":memory:" ? null : autoBackup(db, opts.dataDir), backupsDir: join(opts.dataDir, "backups"), inspectBackup: (file: string) => inspectBackupRaw(file, MIGRATION_COUNT()), stageRestore: (file: string) => stageRestore(opts.dataDir, file) },
     router: { advice: (preferred?: ProviderId) => routerAdvice(db, (p) => providerStatus(p), (p) => quotaOf(p), preferred) },
     ai: { catalog: (p: ProviderId, force = false) => catalog.get(p, force), validate: (p: ProviderId, m?: string | null, e?: string | null) => catalog.validate(p, m, e), policy: (m: ExperienceMode, p: ProviderId) => ({ ...policyFor(m), description: describePolicy(m, p) }),

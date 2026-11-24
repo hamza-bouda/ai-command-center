@@ -6,8 +6,8 @@ Décisions : licence MIT (hamza-bouda) ; Release GitHub publique autorisée (à 
 - [x] 2. CI GitHub Actions + cibles mac/linux (construit, non testé)
 - [x] 3. Sauvegarde / restauration globale
 - [~] 4. Génération d'images (Codex image_gen) : codé + 5 tests ; test réel bloqué tant que `codex login` n'est pas refait (jeton révoqué)
-- [ ] 5. Export HTML autonome + PDF
-- [ ] 6. Mémoire validée par l'utilisateur
+- [x] 5. Export HTML autonome + PDF
+- [~] 6. Mémoire validée par l'utilisateur
 - [ ] 7. Bases de connaissances + recherche
 - [ ] 8. Aperçu de fichiers
 - [ ] 9. Voix (lecture ; dictée testée)

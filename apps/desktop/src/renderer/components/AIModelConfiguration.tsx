@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Info, ShieldCheck, ShieldAlert, ChevronDown, Check, Gauge } from "lucide-react";
+import { Info, ShieldCheck, ShieldAlert, ChevronDown, Check, Gauge, Sparkles } from "lucide-react";
 import { useData } from "../hooks";
 
 export type ProviderId = "claude" | "codex";
@@ -60,12 +60,25 @@ export function AIModelConfiguration({ mode, value, onChange, variant = "form", 
   const modelOpts = [<option key="" value="">Défaut du fournisseur</option>, ...models.filter((m) => m.id).map((m) => <option key={m.id} value={m.id}>{m.displayName}{m.source === "cli-alias" ? " (alias)" : m.source === "observed" ? " (déjà utilisé)" : ""}</option>)];
   const cur = models.find((m) => m.id === (value.model ?? ""));
 
-  if (variant === "stack") return <div className="space-y-2.5" role="group" aria-label="Configuration du modèle">
-    <div role="radiogroup" aria-label="Fournisseur" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-bg border border-line">{(["claude", "codex"] as ProviderId[]).map((p) => { const c = cats[p]; const on = value.provider === p; const off = !!c && !c.available;
-      return <button key={p} type="button" role="radio" aria-checked={on} disabled={disabled || off || (lockProvider && !on)} title={off ? c?.reason : FAMILY[p]} onClick={() => setProvider(p)} className={`h-8 rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors ${on ? "bg-panel text-fg shadow-sm border border-line-strong" : "text-muted hover:text-fg border border-transparent"} disabled:opacity-45`}><span className={`w-2 h-2 rounded-full ${p === "claude" ? "bg-claude" : "bg-codex"}`} aria-hidden />{PROVIDER_LABEL[p]}</button>; })}</div>
-    <select className="input !h-9 !text-[13px]" aria-label="Modèle" disabled={disabled || !cat?.available} value={value.model ?? ""} onChange={(e) => setModel(e.target.value)} title={cur?.description}>{cat ? modelOpts : <option>Chargement…</option>}</select>
-    {showEffort && efforts && efforts.length > 0 && <div className="flex items-center gap-2"><span className="text-xs text-muted shrink-0">Effort</span><div className="min-w-0 flex-1"><ReasoningEffortSelector compact efforts={efforts} value={value.effort} disabled={disabled || !cat?.available} onChange={(e) => onChange({ ...value, effort: e })} /></div></div>}
-    {cat && !cat.available && <p role="alert" className="text-xs text-warning">{cat.reason}</p>}{note && <p role="status" className="text-xs text-warning">{note}</p>}</div>;
+  if (variant === "stack") {
+    const chips = models.filter((m) => m.id); const levels = efforts ?? [];
+    const idx = value.effort ? levels.findIndex((e) => e.value === value.effort) : -1;
+    return <div className="space-y-4" role="group" aria-label="Configuration du modèle">
+      <div role="radiogroup" aria-label="Fournisseur" className="grid grid-cols-2 gap-2">{(["claude", "codex"] as ProviderId[]).map((p) => { const c = cats[p]; const on = value.provider === p; const off = !!c && !c.available; const col = p === "claude" ? "var(--claude)" : "var(--codex)";
+        return <button key={p} type="button" role="radio" aria-checked={on} disabled={disabled || off || (lockProvider && !on)} title={off ? c?.reason : FAMILY[p]} onClick={() => setProvider(p)}
+          className="relative text-left rounded-2xl px-3 py-2.5 border transition-all duration-200 active:scale-[0.97] disabled:opacity-45 overflow-hidden"
+          style={on ? { borderColor: col, background: `linear-gradient(135deg, color-mix(in srgb, ${col} 22%, transparent), color-mix(in srgb, ${col} 4%, transparent))`, boxShadow: `0 0 0 3px color-mix(in srgb, ${col} 14%, transparent)` } : { borderColor: "var(--border)" }}>
+          <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: col, boxShadow: on ? `0 0 10px ${col}` : "none" }} aria-hidden /><span className={`text-[13px] font-semibold ${on ? "text-fg" : "text-fg2"}`}>{PROVIDER_LABEL[p]}</span>{on && <Check size={13} className="ml-auto" style={{ color: col }} aria-hidden />}</span>
+          <span className="text-2xs text-muted block mt-0.5">{off ? "indisponible" : FAMILY[p]}</span></button>; })}</div>
+      <div><div className="text-2xs uppercase tracking-wider text-muted mb-1.5 px-0.5">Modèle</div>
+        <div role="radiogroup" aria-label="Modèle" className="flex flex-wrap gap-1.5">{!cat ? <span className="text-xs text-muted">Chargement…</span> : [{ id: "", displayName: "Auto", description: "Le fournisseur choisit le modèle recommandé pour votre abonnement." } as ModelInfo, ...chips].map((m) => { const on = (value.model ?? "") === m.id;
+          return <button key={m.id || "auto"} type="button" role="radio" aria-checked={on} disabled={disabled || !cat.available} title={m.description} onClick={() => setModel(m.id)} className={`h-8 px-3 rounded-full text-[13px] border transition-all duration-150 active:scale-95 ${on ? "bg-accent text-[var(--accent-fg,#fff)] border-transparent font-medium shadow-sm" : "border-line text-fg2 hover:border-line-strong hover:text-fg hover:bg-raised"} ${m.id === "" ? "inline-flex items-center gap-1" : ""}`}>{m.id === "" && <Sparkles size={12} aria-hidden />}{m.displayName}</button>; })}</div></div>
+      {showEffort && levels.length > 0 && <div><div className="flex items-baseline justify-between mb-1.5 px-0.5"><span className="text-2xs uppercase tracking-wider text-muted">Réflexion</span><span className="text-xs text-fg2 font-medium">{value.effort ? effortLabel(value.effort) : "Auto"}</span></div>
+        <div role="radiogroup" aria-label="Effort de raisonnement" className="flex items-end gap-1.5 h-11">
+          <button type="button" role="radio" aria-checked={!value.effort} disabled={disabled} title="Le fournisseur choisit le niveau" onClick={() => onChange({ ...value, effort: null })} className={`h-full px-2.5 rounded-xl text-xs border transition-all active:scale-95 ${!value.effort ? "border-accent text-accent bg-accent-subtle font-medium" : "border-line text-muted hover:text-fg"}`}>Auto</button>
+          {levels.map((e, k) => { const lit = idx >= k; const h = 36 + Math.round((k / Math.max(1, levels.length - 1)) * 64); return <button key={e.value} type="button" role="radio" aria-checked={value.effort === e.value} aria-label={effortLabel(e.value)} disabled={disabled} title={`${effortLabel(e.value)}${e.description ? " : " + e.description : ""}`} onClick={() => onChange({ ...value, effort: e.value })} className="flex-1 rounded-lg transition-all duration-200 active:scale-95 hover:brightness-110" style={{ height: `${h}%`, background: lit ? "var(--accent)" : "var(--surface-hover)", opacity: lit ? 1 : 0.7 }} />; })}</div></div>}
+      {cat && !cat.available && <p role="alert" className="text-xs text-warning">{cat.reason}</p>}{note && <p role="status" className="text-xs text-warning">{note}</p>}</div>;
+  }
   if (variant === "inline") return <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Configuration du modèle">
     <select className="input !h-8 !text-xs !w-auto" aria-label="Fournisseur" disabled={disabled || lockProvider} value={value.provider} onChange={(e) => setProvider(e.target.value as ProviderId)}>{provOpts}</select>
     <select className="input !h-8 !text-xs !w-auto max-w-[190px]" aria-label="Modèle" disabled={disabled || !cat?.available} value={value.model ?? ""} onChange={(e) => setModel(e.target.value)} title={cur?.description}>{cat ? modelOpts : <option>Chargement…</option>}</select>

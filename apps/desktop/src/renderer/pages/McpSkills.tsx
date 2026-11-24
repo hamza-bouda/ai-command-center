@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, RefreshCw, Search, Wrench, Plug, Info, Trash2, FlaskConical, FolderInput, AlertTriangle, CheckCircle2, XCircle, Puzzle, Sparkles, FileText } from "lucide-react";
+import { Plus, RefreshCw, Search, Wrench, Plug, Info, Trash2, FlaskConical, FolderInput, AlertTriangle, CheckCircle2, XCircle, Puzzle, Sparkles, FileText, Check, Copy } from "lucide-react";
 import { api } from "../api"; import { useData } from "../hooks"; import { useT } from "../i18n"; import { toast, confirmDialog } from "../overlay";
 import { ConverterSetupModal } from "../components/attachFlow";
 import { Page, Card, Badge, EmptyState, ErrorState, LoadingSkeleton, Tabs, Skeleton, Modal, Field, Segmented } from "../ui";
@@ -68,6 +68,7 @@ function Mine() {
         <div className="flex items-start gap-3 mb-2"><span className="w-9 h-9 rounded-xl bg-raised border border-line grid place-items-center text-fg2 shrink-0">{isMcp ? <Plug size={16} /> : <Sparkles size={16} />}</span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h3 className="font-semibold truncate">{e.name}</h3><span className="text-2xs text-muted border border-line rounded px-1.5">{isMcp ? (e.config.transport === "http" ? "MCP distant" : "MCP local") : "Skill"}</span></div>
           <p className="text-xs text-muted truncate mono mt-0.5" title={isMcp ? e.config.url ?? e.config.command : e.config.description}>{isMcp ? e.config.url ?? [e.config.command, ...(e.config.args ?? [])].join(" ") : e.config.description || "Aucune description"}</p></div>
           <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer shrink-0"><input type="checkbox" checked={e.enabled} onChange={async (x) => { await api("ext.setEnabled", e.id, x.target.checked); reload(); }} aria-label={`Activer ${e.name}`} />{e.enabled ? "Active" : "Pause"}</label></div>
+        {isMcp && e.config.transport === "http" && /^https:\/\/[^\s"'`$;&|<>]+$/.test(e.config.url ?? "") && <OAuthHint name={e.name} url={e.config.url} />}
         {isMcp && (e.config.envKeys?.length > 0 || e.config.headerKeys?.length > 0) && <p className="text-2xs text-muted mb-2">Secrets stockés localement : {[...(e.config.envKeys ?? []), ...(e.config.headerKeys ?? [])].join(", ")} (valeurs masquées)</p>}
         <div className="mb-3"><span className="text-2xs text-muted block mb-1">Utilisable dans</span><ModeChips value={e.modes} onChange={async (m) => { await api("ext.setModes", e.id, m); reload(); }} />{isMcp && e.modes.includes("chat") && <p className="text-2xs text-warning mt-1">Outils autorisés en Chat.</p>}</div>
         {t && !t.busy && <div className={`text-xs mb-3 ${t.ok ? "text-success" : "text-danger"}`}>{t.ok ? `Connexion réussie (${t.ms} ms)${t.tools?.length ? ` · ${t.tools.map((x: any) => x.name).join(", ")}` : ""}` : t.error}</div>}
@@ -75,6 +76,13 @@ function Mine() {
     <AddMcp open={mcp} onClose={() => setMcp(false)} onAdded={reload} /><AddSkill open={skill} onClose={() => setSkill(false)} onAdded={reload} /></div>;
 }
 
+/** Serveur distant qui exige une connexion en ligne (OAuth) : l'application ne la fait jamais elle-même ; la commande officielle de Codex s'exécute dans votre terminal. */
+function OAuthHint({ name, url }: { name: string; url: string }) {
+  const [open, setOpen] = useState(false); const [ok, setOk] = useState(false); const cmd = `codex mcp login -c 'mcp_servers.${name}.url="${url}"' ${name}`;
+  return <div className="mb-2"><button className="text-2xs text-accent hover:underline" onClick={() => setOpen(!open)}>{open ? "Masquer" : "Ce serveur demande une connexion en ligne (OAuth) ?"}</button>
+    {open && <div className="mt-1.5 rounded-lg border border-line p-2.5"><p className="text-2xs text-muted mb-1.5">Avec Codex, lancez cette commande officielle dans un terminal : la page de connexion s'ouvre dans votre navigateur et Codex garde le jeton lui-même (l'application ne le voit jamais). Non vérifié ici avec un vrai serveur OAuth ; Claude Code gère ses connexions MCP depuis son propre outil (<span className="mono">/mcp</span>).</p>
+      <div className="flex items-center gap-1.5"><code className="mono text-2xs flex-1 break-all select-text">{cmd}</code><button className="btn btn-ghost btn-icon !h-7 !w-7" aria-label="Copier la commande" onClick={() => { void navigator.clipboard?.writeText(cmd).catch(() => {}); setOk(true); setTimeout(() => setOk(false), 1400); }}>{ok ? <Check size={13} /> : <Copy size={13} />}</button></div></div>}</div>;
+}
 export default function McpSkills() {
   const t = useT(); const [tab, setTab] = useState<"mine" | "mcp" | "skills">("mine"); const [q, setQ] = useState(""); const [prov, setProv] = useState(""); const [force, setForce] = useState(false);
   const { data: mcp, err, loading, reload } = useData<{ servers: any[]; errors: string[] }>("sys.mcp", [force], { every: 0, enabled: tab === "mcp" }); const { data: skills, reload: rsk } = useData<any[]>("sys.skills", [], { enabled: tab === "skills" });

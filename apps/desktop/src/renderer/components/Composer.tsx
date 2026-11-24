@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom"; import { ArrowUp, Square, Paperclip, ImagePlus, MonitorUp, Globe, ChevronDown, X, Plug, Sparkles, ImageIcon, Database } from "lucide-react"; import { api } from "../api";
 import { useData } from "../hooks"; import { StyleSelect } from "./Personalization";
 import { Modal } from "../ui";
@@ -51,12 +51,15 @@ function QuotaMeter({ provider }: { provider: "claude" | "codex" }) {
 }
 
 /** Pastille de configuration : un seul bouton lisible qui ouvre le panneau fournisseur / modèle / effort / permissions. */
+/** Ligne d'option à cocher : libellé court, explication en infobulle (la fenêtre reste compacte). */
+function OptToggle({ icon, label, hint, checked, onChange }: { icon: React.ReactNode; label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return <label title={hint} className="flex items-center gap-2.5 h-9 px-2 rounded-lg hover:bg-raised cursor-pointer text-[13px]"><span className="text-accent shrink-0">{icon}</span><span className="flex-1">{label}</span><input type="checkbox" className="w-4 h-4 accent-[var(--accent)]" checked={checked} onChange={(e) => onChange(e.target.checked)} /></label>;
+}
 /** Choix de la base de connaissances reliée à la conversation (extraits pertinents ajoutés à chaque message). */
 function KbPicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
   const { data: kbs } = useData<any[]>("kb.list", []); if (!kbs?.length && !value) return null;
-  return <div className="mt-3 pt-3 border-t border-line"><label className="text-[13px] font-medium flex items-center gap-1.5 mb-1.5" htmlFor="kb-pick"><Database size={14} className="text-accent" />Base de connaissances</label>
-    <select id="kb-pick" className="input !h-9" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}><option value="">Aucune</option>{kbs?.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.docs} doc.)</option>)}</select>
-    <span className="text-2xs text-muted block mt-1">Seuls les extraits pertinents (≈ 2 000 tokens au plus) sont ajoutés à chaque message.</span></div>;
+  return <div className="flex items-center gap-2.5 px-2" title="Seuls les extraits pertinents (≈ 2 000 tokens au plus) sont ajoutés à chaque message."><label className="text-[13px] flex items-center gap-2.5 shrink-0" htmlFor="kb-pick"><span className="text-accent"><Database size={14} /></span>Base</label>
+    <select id="kb-pick" className="input !h-8 !text-[13px] flex-1 min-w-0" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}><option value="">Aucune</option>{kbs?.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.docs} doc.)</option>)}</select></div>;
 }
 function ModelPill({ mode, cfg, onChange, disabled, convId, style, onStyle, web, onWeb, gen, onGen, kb, onKb }: { mode: Mode; cfg: AIConfig; onChange: (c: AIConfig) => void; disabled?: boolean; convId?: string; style?: string | null; onStyle?: (id: string | null) => void; web?: boolean; onWeb?: (v: boolean) => void; gen?: boolean; onGen?: (v: boolean) => void; kb?: string | null; onKb?: (id: string | null) => void }) {
   const [open, setOpen] = useState(false); const [side, setSide] = useState<{ up: boolean; max: number }>({ up: true, max: 480 }); const ref = useRef<HTMLDivElement>(null); const { data: cat } = useData<any>("ai.catalog", [cfg.provider]);
@@ -67,12 +70,15 @@ function ModelPill({ mode, cfg, onChange, disabled, convId, style, onStyle, web,
       <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.provider === "claude" ? "bg-claude" : "bg-codex"}`} aria-hidden />
       <span className="truncate font-medium text-fg">{PROVIDER_LABEL[cfg.provider]}</span><span className="text-muted hidden sm:inline">·</span><span className="truncate hidden sm:inline">{model}</span>
       {cfg.effort && <span className="hidden md:inline text-muted">· {effortLabel(cfg.effort)}</span>}<ChevronDown size={14} className={`shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`} /></button>
-    {open && <div role="dialog" aria-label="Configuration du modèle" className={`anim-pop absolute left-0 w-[380px] max-w-[88vw] bg-panel border border-line-strong rounded-2xl p-4 z-40 flex flex-col ${side.up ? "bottom-full mb-2" : "top-full mt-2"}`} style={{ boxShadow: "var(--shadow-pop)", maxHeight: side.max }}>
-      <div className="flex items-center justify-between mb-3"><span className="font-semibold text-[14px]">Modèle et réglages</span><button className="btn btn-ghost btn-icon !h-7 !w-7" aria-label="Fermer" onClick={() => setOpen(false)}><X size={14} /></button></div>
-      <div className="overflow-auto pr-1 -mr-1 flex-1 min-h-0"><AIModelConfiguration mode={mode} value={cfg} onChange={onChange} />{onStyle && <StyleSelect value={style ?? null} onChange={onStyle} />}
-        {onKb && <KbPicker value={kb ?? null} onChange={onKb} />}
-        {onGen && <div className="mt-3 pt-3 border-t border-line"><label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" className="w-4 h-4 mt-0.5 accent-[var(--accent)]" checked={!!gen} onChange={(e) => onGen(e.target.checked)} /><span><span className="text-[13px] font-medium flex items-center gap-1.5"><ImageIcon size={14} className="text-accent" />Génération d'images</span><span className="text-2xs text-muted block mt-0.5">Codex peut créer des images avec votre abonnement ChatGPT (sans clé API). Elles comptent dans votre quota ChatGPT. Seul l'outil d'image est ajouté : toujours aucune commande ni fichier.</span></span></label></div>}
-        {onWeb && <div className="mt-3 pt-3 border-t border-line"><label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" className="w-4 h-4 mt-0.5 accent-[var(--accent)]" checked={!!web} onChange={(e) => onWeb(e.target.checked)} /><span><span className="text-[13px] font-medium flex items-center gap-1.5"><Globe size={14} className="text-accent" />Recherche web</span><span className="text-2xs text-muted block mt-0.5">Permet au modèle de chercher et de lire des pages sur Internet pour cette conversation. Le Chat n'est alors plus « sans outils » : seuls les outils web sont autorisés. Les pages lues consomment des tokens.</span></span></label></div>}</div></div>}</div>;
+    {open && <div role="dialog" aria-label="Configuration du modèle" className={`anim-pop absolute left-0 w-[320px] max-w-[88vw] bg-panel border border-line-strong rounded-2xl p-3 z-40 flex flex-col ${side.up ? "bottom-full mb-2" : "top-full mt-2"}`} style={{ boxShadow: "var(--shadow-pop)", maxHeight: side.max }}>
+      <div className="overflow-auto flex-1 min-h-0 space-y-3"><AIModelConfiguration mode={mode} value={cfg} onChange={onChange} variant="stack" />
+        {(onStyle || onKb || onGen || onWeb) && <details className="group border-t border-line pt-2.5" open={!!(web || (gen && onGen) || kb)}><summary className="cursor-pointer select-none text-[13px] text-fg2 hover:text-fg flex items-center gap-1.5 list-none"><ChevronDown size={14} className="text-muted transition-transform -rotate-90 group-open:rotate-0" />Options{[web && onWeb, gen && onGen, kb].filter(Boolean).length > 0 && <span className="text-2xs text-accent">· {[web && onWeb, gen && onGen, kb].filter(Boolean).length} active(s)</span>}</summary>
+          <div className="mt-2 space-y-1.5">
+            {onStyle && <StyleSelect value={style ?? null} onChange={onStyle} />}
+            {onKb && <KbPicker value={kb ?? null} onChange={onKb} />}
+            {onGen && <OptToggle icon={<ImageIcon size={14} />} label="Génération d'images" hint="Codex crée des images avec votre abonnement ChatGPT (sans clé API) ; elles comptent dans votre quota. Seul l'outil d'image est ajouté." checked={!!gen} onChange={onGen} />}
+            {onWeb && <OptToggle icon={<Globe size={14} />} label="Recherche web" hint="Le modèle peut chercher et lire des pages sur Internet pour cette conversation. Le Chat n'est alors plus « sans outils » : seuls les outils web sont autorisés. Les pages lues consomment des tokens." checked={!!web} onChange={onWeb} />}
+          </div></details>}</div></div>}</div>;
 }
 
 /**

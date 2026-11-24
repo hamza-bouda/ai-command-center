@@ -1,6 +1,6 @@
 // Audit de non-débordement : parcourt toutes les pages à plusieurs tailles de fenêtre via le port de débogage Electron.
 // Usage : lancer `electron . --remote-debugging-port=9333`, puis `node tools/audit-overflow.mjs` (ROUTES et SIZES optionnels).
-const pages = await (await fetch("http://127.0.0.1:9333/json")).json();
+const pages = await (await fetch(`http://127.0.0.1:${process.env.PORT ?? 9333}/json`)).json();
 const ws = new WebSocket(pages.find((p) => p.type === "page").webSocketDebuggerUrl); await new Promise((r) => (ws.onopen = r)); let id = 0; const pend = new Map();
 ws.onmessage = (m) => { const j = JSON.parse(m.data); pend.get(j.id)?.(j); };
 const send = (method, params = {}) => new Promise((r) => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });

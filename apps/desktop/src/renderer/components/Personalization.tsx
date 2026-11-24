@@ -10,9 +10,8 @@ const tok = (n: number) => Math.round(n / 4);
 export function StyleSelect({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
   const { data: styles } = useData<Style[]>("style.list", [], { events: /settings/ }); const { data: prof } = useData<any>("profile.get", []);
   const def = styles?.find((s) => s.id === prof?.defaultStyle);
-  return <div className="mt-3 pt-3 border-t border-line"><label className="label" htmlFor="style-select">Style de réponse</label>
-    <select id="style-select" className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}><option value="">{def ? `Par défaut (${def.name})` : "Par défaut (aucun style)"}</option>{styles?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-    <p className="text-2xs text-muted mt-1.5">Ajoute une courte consigne à chaque message de cette conversation. Se gère dans Paramètres › Personnalisation.</p></div>;
+  return <div className="flex items-center gap-2.5 px-2" title="Ajoute une courte consigne à chaque message de cette conversation. Se gère dans Paramètres › Personnalisation."><label className="text-[13px] shrink-0" htmlFor="style-select">Style</label>
+    <select id="style-select" className="input !h-8 !text-[13px] flex-1 min-w-0" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}><option value="">{def ? `Par défaut (${def.name})` : "Par défaut (aucun style)"}</option>{styles?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>;
 }
 
 /** Paramètres › Personnalisation : ce que l'IA doit savoir de vous, comment répondre, styles. */

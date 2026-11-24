@@ -47,7 +47,7 @@ function PolicyPanel({ mode, provider }: { mode: Mode; provider: ProviderId }) {
  * Configuration IA unifiée (fournisseur / modèle / effort / permissions du mode).
  * Les options viennent du catalogue des interfaces officielles ; une valeur non exposée n'est jamais proposée.
  */
-export function AIModelConfiguration({ mode, value, onChange, variant = "form", showEffort = true, showPolicy = true, lockProvider, disabled }: { mode: Mode; value: AIConfig; onChange: (v: AIConfig) => void; variant?: "form" | "inline"; showEffort?: boolean; showPolicy?: boolean; lockProvider?: boolean; disabled?: boolean }) {
+export function AIModelConfiguration({ mode, value, onChange, variant = "form", showEffort = true, showPolicy = true, lockProvider, disabled }: { mode: Mode; value: AIConfig; onChange: (v: AIConfig) => void; variant?: "form" | "inline" | "stack"; showEffort?: boolean; showPolicy?: boolean; lockProvider?: boolean; disabled?: boolean }) {
   const { data: cl } = useData<Catalog>("ai.catalog", ["claude"], { every: 120000 }); const { data: cx } = useData<Catalog>("ai.catalog", ["codex"], { every: 120000 });
   const cats: Record<ProviderId, Catalog | undefined> = { claude: cl, codex: cx }; const cat = cats[value.provider]; const [note, setNote] = useState<string>();
   const models = cat?.models ?? []; const efforts = useMemo(() => effortsFor(cat, value.model), [cat, value.model]);
@@ -60,6 +60,12 @@ export function AIModelConfiguration({ mode, value, onChange, variant = "form", 
   const modelOpts = [<option key="" value="">Défaut du fournisseur</option>, ...models.filter((m) => m.id).map((m) => <option key={m.id} value={m.id}>{m.displayName}{m.source === "cli-alias" ? " (alias)" : m.source === "observed" ? " (déjà utilisé)" : ""}</option>)];
   const cur = models.find((m) => m.id === (value.model ?? ""));
 
+  if (variant === "stack") return <div className="space-y-2.5" role="group" aria-label="Configuration du modèle">
+    <div role="radiogroup" aria-label="Fournisseur" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-bg border border-line">{(["claude", "codex"] as ProviderId[]).map((p) => { const c = cats[p]; const on = value.provider === p; const off = !!c && !c.available;
+      return <button key={p} type="button" role="radio" aria-checked={on} disabled={disabled || off || (lockProvider && !on)} title={off ? c?.reason : FAMILY[p]} onClick={() => setProvider(p)} className={`h-8 rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors ${on ? "bg-panel text-fg shadow-sm border border-line-strong" : "text-muted hover:text-fg border border-transparent"} disabled:opacity-45`}><span className={`w-2 h-2 rounded-full ${p === "claude" ? "bg-claude" : "bg-codex"}`} aria-hidden />{PROVIDER_LABEL[p]}</button>; })}</div>
+    <select className="input !h-9 !text-[13px]" aria-label="Modèle" disabled={disabled || !cat?.available} value={value.model ?? ""} onChange={(e) => setModel(e.target.value)} title={cur?.description}>{cat ? modelOpts : <option>Chargement…</option>}</select>
+    {showEffort && efforts && efforts.length > 0 && <div className="flex items-center gap-2"><span className="text-xs text-muted shrink-0">Effort</span><div className="min-w-0 flex-1"><ReasoningEffortSelector compact efforts={efforts} value={value.effort} disabled={disabled || !cat?.available} onChange={(e) => onChange({ ...value, effort: e })} /></div></div>}
+    {cat && !cat.available && <p role="alert" className="text-xs text-warning">{cat.reason}</p>}{note && <p role="status" className="text-xs text-warning">{note}</p>}</div>;
   if (variant === "inline") return <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Configuration du modèle">
     <select className="input !h-8 !text-xs !w-auto" aria-label="Fournisseur" disabled={disabled || lockProvider} value={value.provider} onChange={(e) => setProvider(e.target.value as ProviderId)}>{provOpts}</select>
     <select className="input !h-8 !text-xs !w-auto max-w-[190px]" aria-label="Modèle" disabled={disabled || !cat?.available} value={value.model ?? ""} onChange={(e) => setModel(e.target.value)} title={cur?.description}>{cat ? modelOpts : <option>Chargement…</option>}</select>

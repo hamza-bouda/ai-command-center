@@ -69,12 +69,28 @@ export function listSkills(home = homedir()): SkillInfo[] {
 
 // ---------------- sauvegarde / restauration ----------------
 const nodeRequire = createRequire((typeof __dirname !== "undefined" ? __dirname : process.cwd()) + "/");
-export function backupTo(db: DB, file: string) { if (existsSync(file)) rmSync(file); db.exec(`VACUUM INTO '${resolve(file).replace(/'/g, "''")}'`); return statSync(file).size; }
+/** Retire des variables d'environnement et en-têtes des serveurs MCP (peuvent contenir des clés tierces) : seules leurs clés restent. */
+export function stripSecrets(file: string): number {
+  const { DatabaseSync } = nodeRequire("node:sqlite") as typeof import("node:sqlite"); const d = new DatabaseSync(file); let n = 0;
+  try { for (const r of d.prepare("SELECT id, config FROM extensions WHERE kind='mcp'").all() as any[]) { try { const c = JSON.parse(r.config); const had = Object.keys(c.env ?? {}).length + Object.keys(c.headers ?? {}).length; if (had) { c.env = Object.fromEntries(Object.keys(c.env ?? {}).map((k) => [k, ""])); c.headers = Object.fromEntries(Object.keys(c.headers ?? {}).map((k) => [k, ""])); d.prepare("UPDATE extensions SET config=? WHERE id=?").run(JSON.stringify(c), r.id); n += had; } } catch { /* config illisible : laissée telle quelle */ } } } finally { d.close(); }
+  return n;
+}
+export function backupTo(db: DB, file: string) { if (existsSync(file)) rmSync(file); db.exec(`VACUUM INTO '${resolve(file).replace(/'/g, "''")}'`); const stripped = stripSecrets(file); return { size: statSync(file).size, stripped }; }
+/** Sauvegarde automatique hebdomadaire dans userData/backups (5 dernières conservées). Renvoie le fichier créé, ou null. */
+export function autoBackup(db: DB, dataDir: string, everyDays = 7, keep = 5): string | null {
+  const dir = join(dataDir, "backups"); mkdirSync(dir, { recursive: true });
+  const files = readdirSync(dir).filter((f) => /^auto-.*.sqlite$/.test(f)).sort();
+  const last = files.at(-1); if (last && Date.now() - statSync(join(dir, last)).mtimeMs < everyDays * 86400000) return null;
+  const out = join(dir, `auto-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`); backupTo(db, out);
+  for (const old of [...files, basename(out)].sort().slice(0, -keep)) rmSync(join(dir, old), { force: true });
+  return out;
+}
 /** Valide un fichier de sauvegarde sans l'appliquer. */
-export function inspectBackup(file: string): { ok: boolean; error?: string; migrations?: number; projects?: number; conversations?: number } {
+export function inspectBackup(file: string, maxMigrations = Infinity): { ok: boolean; error?: string; migrations?: number; projects?: number; conversations?: number } {
   try { const { DatabaseSync } = nodeRequire("node:sqlite") as typeof import("node:sqlite"); const d = new DatabaseSync(file, { readOnly: true }); try {
     const mig = (d.prepare("SELECT COUNT(*) c FROM schema_migrations").get() as any).c; const has = (t: string) => !!d.prepare("SELECT 1 x FROM sqlite_master WHERE type='table' AND name=?").get(t);
     if (!has("projects") || !has("agent_executions")) return { ok: false, error: "Ce fichier n'est pas une sauvegarde AI Command Center." };
+    if (mig > maxMigrations) return { ok: false, error: "Cette sauvegarde vient d'une version plus récente de l'application : mettez l'application à jour avant de la restaurer." };
     return { ok: true, migrations: mig, projects: (d.prepare("SELECT COUNT(*) c FROM projects").get() as any).c, conversations: has("conversations") ? (d.prepare("SELECT COUNT(*) c FROM conversations").get() as any).c : 0 }; } finally { d.close(); } }
   catch (e: any) { return { ok: false, error: `Fichier illisible : ${e.message}` }; }
 }

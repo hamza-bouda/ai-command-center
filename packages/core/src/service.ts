@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { DB, openDb, all, one, run, uid, now, tx } from "./db.js";
+import { DB, MIGRATION_COUNT, openDb, all, one, run, uid, now, tx } from "./db.js";
 import { EventBus } from "./events.js";
 import { seedPricing, listPricing, calculateCost, DISCLAIMER } from "./pricing.js";
 import { ExecutionManager, EnqueueInput } from "./execution.js";
@@ -19,7 +19,7 @@ import { Automations } from "./automations.js";
 import { Extensions } from "./extensions.js"; import { Profile } from "./profile.js"; import { Library } from "./library.js"; import { DocConverter } from "./convert.js";
 import { Workflows } from "./workflows.js";
 import { Comparisons } from "./comparison.js";
-import { ProjectMemory, listMcpCached, listSkills, backupTo, inspectBackup, stageRestore, applyPendingRestore } from "./system.js";
+import { ProjectMemory, listMcpCached, listSkills, backupTo, autoBackup, inspectBackup as inspectBackupRaw, stageRestore, applyPendingRestore } from "./system.js";
 import { routerAdvice } from "./router.js";
 import { Orchestrator } from "./orchestrator.js";
 import { TerminalManager } from "./terminal.js";
@@ -91,7 +91,7 @@ export function createCore(opts: { dataDir: string; dbFile?: string; adapters?: 
   };
   return {
     db, bus, exec, recovered, terminals, orchestrator, conversations, works, workflows, comparisons, memory, restored, quality, automations, extensions, converter, profile, library,
-    system: { mcp: (force?: boolean) => listMcpCached(!!force), skills: () => listSkills(), backup: (file: string) => backupTo(db, file), inspectBackup, stageRestore: (file: string) => stageRestore(opts.dataDir, file) },
+    system: { mcp: (force?: boolean) => listMcpCached(!!force), skills: () => listSkills(), backup: (file: string) => backupTo(db, file), autoBackup: () => dbFile === ":memory:" ? null : autoBackup(db, opts.dataDir), backupsDir: join(opts.dataDir, "backups"), inspectBackup: (file: string) => inspectBackupRaw(file, MIGRATION_COUNT()), stageRestore: (file: string) => stageRestore(opts.dataDir, file) },
     router: { advice: (preferred?: ProviderId) => routerAdvice(db, (p) => providerStatus(p), (p) => quotaOf(p), preferred) },
     ai: { catalog: (p: ProviderId, force = false) => catalog.get(p, force), validate: (p: ProviderId, m?: string | null, e?: string | null) => catalog.validate(p, m, e), policy: (m: ExperienceMode, p: ProviderId) => ({ ...policyFor(m), description: describePolicy(m, p) }),
       defaults: () => Object.fromEntries(EXPERIENCE_MODES.map((m) => [m, getSetting<any>(db, "defaults." + m, null)])), setDefault: (m: ExperienceMode, v: unknown) => setSetting(db, "defaults." + m, v) }, disclaimer: DISCLAIMER,

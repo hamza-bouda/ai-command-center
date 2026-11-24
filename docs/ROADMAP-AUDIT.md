@@ -4,7 +4,7 @@ Décisions : licence MIT (hamza-bouda) ; Release GitHub publique autorisée (à 
 - [x] 0. LICENSE MIT
 - [x] 1. npm audit (overrides)
 - [x] 2. CI GitHub Actions + cibles mac/linux (construit, non testé)
-- [ ] 3. Sauvegarde / restauration globale
+- [x] 3. Sauvegarde / restauration globale
 - [ ] 4. Génération d'images (Codex image_gen, abonnement ChatGPT)
 - [ ] 5. Export HTML autonome + PDF
 - [ ] 6. Mémoire validée par l'utilisateur

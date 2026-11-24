@@ -85,6 +85,7 @@ ALTER TABLE conversations ADD COLUMN ext_disabled TEXT;`,
 `ALTER TABLE conversations ADD COLUMN web INTEGER DEFAULT 0;`,
 ];
 
+export const MIGRATION_COUNT = () => MIGRATIONS.length;
 export function openDb(file: string): DB {
   if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);

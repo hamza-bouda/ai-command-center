@@ -158,3 +158,7 @@ h1, .font-display { font-family: "Source Serif 4 Variable", "Iowan Old Style", G
 .react-flow__handle { transition: transform .12s ease; } .react-flow__handle:hover { transform: scale(1.35); }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3; }
 .react-flow__connection-path { stroke-dasharray: 6 5; }
+
+/* Étape en cours : halo animé */
+@keyframes nodeLive { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent), 0 4px 18px rgba(0,0,0,.25); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent), 0 4px 18px rgba(0,0,0,.25); } }
+.node-live { border: 1.5px solid var(--accent) !important; animation: nodeLive 1.8s ease-in-out infinite; }

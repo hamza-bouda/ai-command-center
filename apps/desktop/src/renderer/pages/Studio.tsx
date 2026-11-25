@@ -2,48 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useSearchParams } from "react-router-dom";
 import ReactFlow, { ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap, Handle, Position, MarkerType, useNodesState, useEdgesState, useReactFlow, useUpdateNodeInternals, type Node, type Edge, type NodeProps, type Connection } from "reactflow";
 import "reactflow/dist/style.css";
-import { Compass, LayoutTemplate, Server, Layers, Database, ShieldCheck, Rocket, CheckCheck, Bug, Eye, BookOpen, Gauge, Wrench, Palette, PanelLeftClose, PanelLeftOpen, ArrowLeft, Bot, ShieldAlert, FlaskConical, Bell, Crown, Save, Play, LayoutGrid, Wand2, Trash2, AlertTriangle, CheckCircle2, Sparkles, Plus, GitBranch, Loader2, Copy } from "lucide-react";
+import { Undo2, Redo2, CopyPlus, Compass, LayoutTemplate, Server, Layers, Database, ShieldCheck, Rocket, CheckCheck, Bug, Eye, BookOpen, Gauge, Wrench, Palette, PanelLeftClose, PanelLeftOpen, ArrowLeft, Bot, ShieldAlert, FlaskConical, Bell, Crown, Save, Play, LayoutGrid, Wand2, Trash2, AlertTriangle, CheckCircle2, Sparkles, Plus, GitBranch, Loader2, Copy } from "lucide-react";
 import { api } from "../api"; import { useData } from "../hooks"; import { toast, confirmDialog } from "../overlay"; import { Modal, Field } from "../ui";
 import { ROLES } from "../components/NodeListEditor"; import { RunDialog } from "./Workflows"; import { AgentCockpit, AgentPeek, usePeek } from "../components/AgentCockpit";
 import { slugKey, wouldCycle, toPlan, edgesOf, autoLayout, roots, MAX_NODES, type SNode, type Kind } from "../studio/graph";
 
-const errMsg = (e: any) => String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
-const KIND: Record<Kind, { icon: any; label: string; color: string; hint: string }> = {
-  agent: { icon: Bot, label: "Agent IA", color: "var(--accent)", hint: "Un agent Claude ou Codex qui accomplit une tâche précise" },
-  approval: { icon: ShieldAlert, label: "Validation humaine", color: "var(--warning)", hint: "Le workflow attend votre accord avant de continuer" },
-  test: { icon: FlaskConical, label: "Test (commande)", color: "var(--info)", hint: "Exécute une commande dans le projet (tests, lint, build)" },
-  notification: { icon: Bell, label: "Notification", color: "var(--success)", hint: "Vous prévient quand cette étape est atteinte" },
-};
-/** Chaque rôle d'agent a son icône et sa teinte : on reconnaît l'équipe d'un coup d'œil. */
-const ROLE_STYLE: Record<string, { icon: any; color: string }> = { architect: { icon: Compass, color: "#8b7cf6" }, frontend: { icon: LayoutTemplate, color: "#38bdf8" }, backend: { icon: Server, color: "#34d399" }, fullstack: { icon: Layers, color: "#e0865f" }, database: { icon: Database, color: "#f59e0b" }, security: { icon: ShieldCheck, color: "#ef4444" }, devops: { icon: Rocket, color: "#06b6d4" }, qa: { icon: CheckCheck, color: "#22c55e" }, debugger: { icon: Bug, color: "#f472b6" }, reviewer: { icon: Eye, color: "#a78bfa" }, docs: { icon: BookOpen, color: "#60a5fa" }, performance: { icon: Gauge, color: "#fb923c" }, refactor: { icon: Wrench, color: "#2dd4bf" }, uxui: { icon: Palette, color: "#e879f9" } };
-const styleOf = (kind: Kind, role: string) => (kind === "agent" && ROLE_STYLE[role] ? { ...KIND.agent, ...ROLE_STYLE[role] } : KIND[kind]);
-const roleLabel = (k: string) => ROLES.find(([r]) => r === k)?.[1] ?? k;
-const ORCH = "__orch";
-
-type Dir = "LR" | "TB";
-interface NData { node: SNode; issues: string[]; dir?: Dir; run?: { status: string; tokens: number; execId?: string }; onOpen?: (key: string) => void }
-function StudioNode({ data, selected }: NodeProps<NData>) {
-  const n = data.node; const K = styleOf(n.kind, n.role); const I = K.icon; const bad = data.issues.length > 0; const peek = usePeek();
-  return <div {...peek.hover} className={`w-[208px] rounded-2xl bg-panel transition-all duration-150 ${data.run?.status === "in_progress" ? "node-live" : ""}`} style={{ border: `1.5px solid ${selected ? K.color : bad ? "var(--danger)" : "var(--border-strong)"}`, boxShadow: selected ? `0 0 0 4px color-mix(in srgb, ${K.color} 18%, transparent), var(--shadow-pop)` : "0 6px 20px rgba(0,0,0,.18)" }}>
-    {data.run?.execId && <AgentPeek show={peek.show} pos={peek.pos} hover={peek.hover} execId={data.run.execId} title={n.title} onOpen={() => { peek.hide(); data.onOpen?.(n.key); }} />}
-    <Handle type="target" position={data.dir === "TB" ? Position.Top : Position.Left} className="!w-3 !h-3 !border-2 !bg-panel" style={{ borderColor: K.color, ...(data.dir === "TB" ? { top: -7 } : { left: -7 }) }} />
-    <div className="h-1.5 rounded-t-2xl" style={{ background: `linear-gradient(90deg, ${K.color}, color-mix(in srgb, ${K.color} 25%, transparent))` }} />
-    <div className="p-3"><div className="flex items-center gap-2 mb-1.5"><span className="w-7 h-7 rounded-lg grid place-items-center shrink-0" style={{ background: `color-mix(in srgb, ${K.color} 16%, transparent)`, color: K.color }}><I size={15} /></span>
-      <span className="text-2xs text-muted flex-1 truncate">{n.kind === "agent" ? roleLabel(n.role) : K.label}</span>
-      {data.run && <span className={`text-2xs font-medium rounded-full px-1.5 py-0.5 ${data.run.status === "done" ? "bg-[var(--success-subtle,rgba(34,197,94,.15))] text-success" : data.run.status === "blocked" ? "bg-[var(--danger-subtle,rgba(239,68,68,.15))] text-danger" : data.run.status === "in_progress" ? "bg-accent-subtle text-accent" : "bg-raised text-muted"}`}>{data.run.status === "done" ? "✓ terminé" : data.run.status === "blocked" ? "bloqué" : data.run.status === "in_progress" ? "en cours" : data.run.status === "review" ? "à valider" : "en attente"}</span>}{n.gate && <span title="Validation avant exécution" className="text-warning"><ShieldAlert size={13} /></span>}{bad && <span title={data.issues.join("\n")} className="text-danger"><AlertTriangle size={13} /></span>}</div>
-      <div className="text-[13px] font-semibold leading-snug line-clamp-2">{n.title}</div>
-      <div className="flex items-center gap-1.5 mt-2 text-2xs text-muted">{n.kind === "agent" && <><span className="w-1.5 h-1.5 rounded-full" style={{ background: n.provider === "claude" ? "var(--claude)" : n.provider === "codex" ? "var(--codex)" : "var(--text-muted)" }} />{n.provider === "claude" ? "Claude" : n.provider === "codex" ? "Codex" : "Choix auto"}</>}{n.kind === "test" && <span className="mono truncate">{n.command || "commande ?"}</span>}</div></div>
-    <Handle type="source" position={data.dir === "TB" ? Position.Bottom : Position.Right} className="!w-3 !h-3 !border-2 !bg-panel" style={{ borderColor: K.color, ...(data.dir === "TB" ? { bottom: -7 } : { right: -7 }) }} /></div>;
-}
-function OrchNode({ data, selected }: NodeProps<{ count: number; dir?: Dir }>) {
-  return <div className="w-[196px] rounded-3xl p-3.5 text-white transition-all" style={{ background: "linear-gradient(135deg, #b4532c, #e0865f 60%, #f1a97f)", boxShadow: selected ? "0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent), 0 10px 30px rgba(0,0,0,.35)" : "0 10px 28px rgba(0,0,0,.3)" }}>
-    <div className="flex items-center gap-2.5"><span className="w-10 h-10 rounded-2xl bg-white/20 grid place-items-center"><Crown size={20} /></span><div><div className="font-semibold text-[14px] leading-tight">Orchestrateur</div><div className="text-[11px] opacity-85">chef d'orchestre du projet</div></div></div>
-    <p className="text-[11.5px] leading-snug mt-3 opacity-95">Lance les {data.count} étape(s) dans l'ordre des liens, limite la concurrence, vérifie les permissions, met en pause en cas d'échec.</p>
-    <Handle type="source" position={data.dir === "TB" ? Position.Bottom : Position.Right} className="!w-3 !h-3 !border-2 !bg-white" style={{ borderColor: "#b4532c", ...(data.dir === "TB" ? { bottom: -7 } : { right: -7 }) }} /></div>;
-}
-const nodeTypes = { step: StudioNode, orch: OrchNode };
-const edgeStyle = { stroke: "var(--accent)", strokeWidth: 2 };
-const mkEdge = (s: string, t: string): Edge => ({ id: `${s}->${t}`, source: s, target: t, type: "smoothstep", animated: true, style: edgeStyle, markerEnd: { type: MarkerType.ArrowClosed, color: "var(--accent)" } });
+import { errMsg, KIND, styleOf, roleLabel, ORCH, nodeTypes, edgeStyle, mkEdge, PaletteItem, Inspector, OrchPanel, ProposeDialog, type NData, type Dir } from "../studio/parts";
 
 function StudioInner() {
   const [sp, setSp] = useSearchParams(); const wfId = sp.get("id"); const isNew = !!sp.get("new");
@@ -53,6 +17,15 @@ function StudioInner() {
   const [check, setCheck] = useState<{ ok: boolean; errors: string[]; warnings: string[] }>({ ok: true, errors: [], warnings: [] }); const [loadedFor, setLoadedFor] = useState<string | null>(null); const [start, setStart] = useState(isNew && !wfId);
   const [runId, setRunId] = useState<string | null>(null); const evRun = { events: /orchestration|execution|task|approval|usage/ as RegExp, enabled: !!runId }; const { data: runTasks, reload: reloadRun } = useData<any[]>("orch.tasks", [runId ?? ""], evRun); const { data: runOrch } = useData<any>("orch.get", [runId ?? ""], evRun); const { data: runHs } = useData<any[]>("orch.handoffs", [runId ?? ""], evRun); const [rail, setRail] = useState(false); const [dir, setDir] = useState<Dir>("LR"); const dirRef = useRef<Dir>("LR"); const [runWf, setRunWf] = useState<any>(); const [propose, setPropose] = useState(false); const wrap = useRef<HTMLDivElement>(null); const rf = useReactFlow(); const updateInternals = useUpdateNodeInternals(); const useWt = useRef(false);
 
+  // historique (annuler / rétablir) : instantanés compacts pris 450 ms après chaque modification
+  const hist = useRef<{ past: string[]; future: string[]; last?: string; restoring: boolean }>({ past: [], future: [], restoring: false }); const [histTick, setHistTick] = useState(0); const clip = useRef<SNode | null>(null);
+  const snap = () => JSON.stringify({ n: nodes.filter((n) => n.id !== ORCH).map((n) => [n.id, n.position, (n.data as NData).node]), e: edges.filter((e) => !e.id.startsWith("v-")).map((e) => [e.source, e.target]) });
+  useEffect(() => { const t = setTimeout(() => { const h = hist.current; const cur = snap(); if (h.restoring) { h.restoring = false; h.last = cur; return; } if (h.last === undefined) { h.last = cur; return; } if (cur !== h.last) { h.past.push(h.last); if (h.past.length > 60) h.past.shift(); h.future = []; h.last = cur; setHistTick((x) => x + 1); } }, 450); return () => clearTimeout(t); }, [nodes, edges]);
+  const restore = (str: string) => { const p = JSON.parse(str) as { n: [string, { x: number; y: number }, SNode][]; e: [string, string][] }; hist.current.restoring = true; hist.current.last = str;
+    setNodes((ns) => [...ns.filter((n) => n.id === ORCH), ...p.n.map(([id, position, node]): Node => ({ id, type: "step", position, data: { node, issues: [], dir: dirRef.current } }))]); setEdges(p.e.map(([s, t]) => mkEdge(s, t))); setDirty(true); setHistTick((x) => x + 1); };
+  const undo = () => { const h = hist.current; const prev = h.past.pop(); if (prev === undefined) return; h.future.push(snap()); restore(prev); };
+  const redo = () => { const h = hist.current; const nxt = h.future.pop(); if (nxt === undefined) return; h.past.push(snap()); restore(nxt); };
+  void histTick;
   const steps = useMemo(() => nodes.filter((n) => n.id !== ORCH).map((n) => (n.data as NData).node), [nodes]);
   const realEdges = useMemo(() => edges.filter((e) => !e.id.startsWith("v-")), [edges]);
   const plan = useMemo(() => toPlan(steps, realEdges.map((e) => ({ source: e.source, target: e.target }))).map((n) => ({ ...n, pos: nodes.find((x) => x.id === n.key)?.position })), [steps, realEdges, nodes]);
@@ -62,6 +35,7 @@ function StudioInner() {
     const dd: Dir = d ?? ((wrap.current?.clientWidth ?? 1200) < 900 && !tasks.some((t) => t.pos) ? "TB" : dirRef.current); dirRef.current = dd; setDir(dd);
     const auto = autoLayout(tasks, dd === "LR" ? 245 : 230, dd === "LR" ? 130 : 165, dd); const ns: Node[] = tasks.map((t) => ({ id: t.key, type: "step", position: t.pos ?? auto.get(t.key) ?? { x: 0, y: 0 }, data: { node: t, issues: [], dir: dd } }));
     ns.push({ id: ORCH, type: "orch", position: dd === "LR" ? { x: -250, y: 0 } : { x: 0, y: -215 }, data: { count: tasks.length, dir: dd }, deletable: false, draggable: true });
+    hist.current.past = []; hist.current.future = []; hist.current.last = undefined;
     setNodes(ns); setEdges(edgesOf(tasks).map((e) => mkEdge(e.source, e.target))); setSel(null); setDirty(false); void keepName; setTimeout(() => rf.fitView({ padding: 0.12, minZoom: 0.55, maxZoom: 1, duration: 400 }), 60);
   }, [rf, setNodes, setEdges]);
   useEffect(() => { if (wfId && wf && loadedFor !== wfId) { setLoadedFor(wfId); setName(wf.name); setDesc(wf.description ?? ""); load(wf.nodes); setStart(false); } }, [wfId, wf, loadedFor, load]);
@@ -73,9 +47,9 @@ function StudioInner() {
   // validation en direct (moteur du cœur : mêmes règles qu'au lancement)
   useEffect(() => {
     if (!steps.length) { setCheck({ ok: true, errors: [], warnings: [] }); return; }
-    const t = setTimeout(() => { api("wf.check", plan, useWt.current).then((c: any) => setCheck(c)).catch(() => {}); }, 350); return () => clearTimeout(t);
+    const t = setTimeout(() => { api("wf.check", plan, useWt.current).then((c: any) => setCheck((prev) => (JSON.stringify(prev) === JSON.stringify(c) ? prev : c))).catch(() => {}); }, 350); return () => clearTimeout(t);
   }, [plan]);
-  useEffect(() => { const msgs = [...check.errors, ...check.warnings]; setNodes((ns) => ns.map((n) => { if (n.id === ORCH) return (n.data as any).count === steps.length ? n : { ...n, data: { ...(n.data as any), count: steps.length } }; const d = n.data as NData; const issues = msgs.filter((m) => m.includes(`« ${n.id} »`)); return JSON.stringify(issues) === JSON.stringify(d.issues) ? n : { ...n, data: { ...d, issues } }; })); }, [check, steps.length]);
+  useEffect(() => { const msgs = [...check.errors, ...check.warnings]; setNodes((ns) => { let changed = false; const out = ns.map((n) => { if (n.id === ORCH) return (n.data as any).count === steps.length ? n : (changed = true, { ...n, data: { ...(n.data as any), count: steps.length } }); const d = n.data as NData; const issues = msgs.filter((m) => m.includes(`« ${n.id} »`)); if (JSON.stringify(issues) === JSON.stringify(d.issues)) return n; changed = true; return { ...n, data: { ...d, issues } }; }); return changed ? out : ns; }); }, [check, steps.length]);
 
   // suivi d'une exécution : l'état de chaque tâche s'affiche sur le nœud de même clé
   useEffect(() => { if (!runId) { setNodes((ns) => ns.map((n) => (n.id === ORCH || !(n.data as NData).run ? n : { ...n, data: { ...(n.data as NData), run: undefined } }))); return; }
@@ -90,6 +64,17 @@ function StudioInner() {
   };
   const onConnect = useCallback((c: Connection) => { if (!c.source || !c.target || c.source === ORCH) return; if (wouldCycle(edgesOf(plan), c.source, c.target)) { toast("Ce lien créerait une boucle : une étape ne peut pas dépendre d'elle-même, même indirectement.", "error"); return; } setEdges((es) => (es.some((e) => e.id === `${c.source}->${c.target}`) ? es : [...es, mkEdge(c.source!, c.target!)])); setDirty(true); }, [plan, setEdges]);
   const onDrop = (e: DragEvent) => { e.preventDefault(); const raw = e.dataTransfer.getData("application/acc-node"); if (!raw) return; const { kind, role } = JSON.parse(raw); add(kind, role, rf.project({ x: e.clientX - (wrap.current?.getBoundingClientRect().left ?? 0) - 118, y: e.clientY - (wrap.current?.getBoundingClientRect().top ?? 0) - 40 })); };
+  const cloneStep = (src: SNode) => {
+    if (steps.length >= MAX_NODES) { toast(`${MAX_NODES} étapes au maximum par workflow.`, "error"); return; }
+    const key = slugKey(src.title, steps.map((s) => s.key)); const at = nodes.find((n) => n.id === src.key)?.position ?? { x: 0, y: 0 }; const copy: SNode = { ...src, key, title: src.title.length < 70 ? `${src.title} (copie)` : src.title, dependsOn: [], pos: undefined };
+    setNodes((ns) => [...ns.map((n) => (n.selected ? { ...n, selected: false } : n)), { id: key, type: "step", position: { x: at.x + 40, y: at.y + 40 }, data: { node: copy, issues: [], dir }, selected: true }]); setSel(key); setDirty(true);
+  };
+  const toggleDep = (target: string, source: string, on: boolean) => { if (on) { if (wouldCycle(edgesOf(plan), source, target)) { toast("Ce lien créerait une boucle.", "error"); return; } setEdges((es) => (es.some((e) => e.id === `${source}->${target}`) ? es : [...es, mkEdge(source, target)])); } else setEdges((es) => es.filter((e) => e.id !== `${source}->${target}`)); setDirty(true); };
+  // raccourcis : Ctrl+Z / Ctrl+Y (ou Ctrl+Maj+Z), Ctrl+C / Ctrl+V / Ctrl+D (copier, coller, dupliquer l'étape sélectionnée)
+  const keys = useRef({ undo, redo, cloneStep, steps, sel, runId }); keys.current = { undo, redo, cloneStep, steps, sel, runId };
+  useEffect(() => { const onKey = (e: KeyboardEvent) => { const t = e.target as HTMLElement | null; if (t && (t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable || (t.tagName === "INPUT" && !/^(checkbox|radio|range|button)$/.test((t as HTMLInputElement).type)))) return; /* la saisie de texte garde son propre Ctrl+Z */ if (!(e.ctrlKey || e.metaKey) || keys.current.runId) return; const k = e.key.toLowerCase(); const cur = keys.current.steps.find((s) => s.key === keys.current.sel);
+    if (k === "z" && !e.shiftKey) { e.preventDefault(); keys.current.undo(); } else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); keys.current.redo(); } else if (k === "c" && cur) { clip.current = cur; } else if (k === "v" && clip.current) { e.preventDefault(); keys.current.cloneStep(clip.current); } else if (k === "d" && cur) { e.preventDefault(); keys.current.cloneStep(cur); } };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, []);
   const remove = (key: string) => { setNodes((ns) => ns.filter((n) => n.id !== key)); setEdges((es) => es.filter((e) => e.source !== key && e.target !== key)); setSel(null); setDirty(true); };
 
   const save = async (): Promise<string | undefined> => {
@@ -110,7 +95,7 @@ function StudioInner() {
       <span className={`inline-flex items-center gap-1.5 text-xs whitespace-nowrap ${check.errors.length ? "text-danger" : check.warnings.length ? "text-warning" : "text-success"}`} role="status">{check.errors.length ? <><AlertTriangle size={13} />{check.errors.length} erreur(s)</> : check.warnings.length ? <><AlertTriangle size={13} />{check.warnings.length} avertissement(s)</> : <><CheckCircle2 size={13} />{steps.length ? "Graphe valide" : "Canevas vide"}</>}</span>
       {dirty && <span className="text-2xs text-muted whitespace-nowrap">non enregistré</span>}
       <input className="input !h-9 !w-72 hidden 2xl:block" aria-label="Description du workflow" placeholder="Description (facultatif)" value={desc} maxLength={200} onChange={(e) => { setDesc(e.target.value); setDirty(true); }} />
-      <div className="ml-auto flex items-center gap-2"><button className="btn btn-sm" onClick={() => setPropose(true)} title="L'agent orchestrateur propose un graphe à partir d'un objectif"><Wand2 size={14} />Proposer avec l'orchestrateur</button><button className="btn btn-sm" onClick={() => arrange(dir)}><LayoutGrid size={14} />Ranger</button><button className="btn btn-sm" aria-label={dir === "LR" ? "Passer en disposition verticale" : "Passer en disposition horizontale"} title={dir === "LR" ? "Disposition verticale (haut → bas)" : "Disposition horizontale (gauche → droite)"} onClick={() => arrange(dir === "LR" ? "TB" : "LR")}>{dir === "LR" ? "↓ Vertical" : "→ Horizontal"}</button>
+      <div className="ml-auto flex items-center gap-2"><button className="btn btn-ghost btn-icon !h-8 !w-8" aria-label="Annuler (Ctrl+Z)" title="Annuler (Ctrl+Z)" disabled={!hist.current.past.length || !!runId} onClick={undo}><Undo2 size={15} /></button><button className="btn btn-ghost btn-icon !h-8 !w-8" aria-label="Rétablir (Ctrl+Y)" title="Rétablir (Ctrl+Y)" disabled={!hist.current.future.length || !!runId} onClick={redo}><Redo2 size={15} /></button><button className="btn btn-ghost btn-icon !h-8 !w-8" aria-label="Dupliquer l'étape (Ctrl+D)" title="Dupliquer l'étape sélectionnée (Ctrl+D)" disabled={!selNode} onClick={() => selNode && cloneStep(selNode)}><CopyPlus size={15} /></button><button className="btn btn-sm" onClick={() => setPropose(true)} title="L'agent orchestrateur propose un graphe à partir d'un objectif"><Wand2 size={14} />Proposer avec l'orchestrateur</button><button className="btn btn-sm" onClick={() => arrange(dir)}><LayoutGrid size={14} />Ranger</button><button className="btn btn-sm" aria-label={dir === "LR" ? "Passer en disposition verticale" : "Passer en disposition horizontale"} title={dir === "LR" ? "Disposition verticale (haut → bas)" : "Disposition horizontale (gauche → droite)"} onClick={() => arrange(dir === "LR" ? "TB" : "LR")}>{dir === "LR" ? "↓ Vertical" : "→ Horizontal"}</button>
         {wf?.builtin ? <button className="btn btn-primary btn-sm" onClick={async () => { const id = await api("wf.duplicate", wf.id); reload(); setLoadedFor(null); setSp({ id }, { replace: true }); toast("Copie créée : vous pouvez la modifier.", "success"); }}><Copy size={14} />Dupliquer pour modifier</button> : <button className="btn btn-sm" disabled={!dirty} onClick={() => void save()}><Save size={14} />Enregistrer</button>}
         <button className="btn btn-primary btn-sm" disabled={!steps.length || check.errors.length > 0} onClick={() => void run()}><Play size={14} />Lancer</button></div></div>
     {runId && <div className="shrink-0 h-11 border-b border-line flex items-center gap-3 px-4 bg-accent-subtle text-[13px]" role="status"><span className={`w-2 h-2 rounded-full bg-accent ${["running", "planning"].includes(runOrch?.status) ? "pulse-dot" : ""}`} /><b>Exécution</b><span>{runOrch?.status === "completed" ? "terminée" : runOrch?.status === "paused" ? "en pause" : runOrch?.status === "failed" ? "échouée" : runOrch?.status === "cancelled" ? "annulée" : "en cours"} · {done}/{(runTasks ?? []).length} étapes</span><span className="text-muted hidden md:inline">Cliquez une étape pour ouvrir son cockpit (terminal, interface, contexte).</span>
@@ -134,7 +119,7 @@ function StudioInner() {
             {list?.filter((w) => w.builtin).map((w) => <button key={w.id} className="card lift p-4 text-left" onClick={() => fromTemplate(w)}><GitBranch size={18} className="text-accent mb-2" /><div className="font-semibold">{w.name}</div><div className="text-xs text-muted line-clamp-2">{w.description}</div><div className="text-2xs text-muted mt-1.5">{w.nodes.length} étapes</div></button>)}</div></div></div>}
       </div>
   {sel && <aside aria-label="Réglages de l'étape" className="w-[320px] shrink-0 border-l border-line bg-sidebar overflow-auto p-4 anim-slide">{sel === ORCH ? <OrchPanel count={steps.length} onWt={(v) => { useWt.current = v; setDirty(true); }} onPropose={() => setPropose(true)} />
-          : selNode ? <Inspector node={selNode} incoming={incoming} onPatch={(p) => patch(selNode.key, p)} onDelete={() => remove(selNode.key)} /> : null}</aside>}
+          : selNode ? <Inspector node={selNode} incoming={incoming} others={steps.filter((s) => s.key !== selNode.key)} deps={realEdges.filter((e) => e.target === selNode.key).map((e) => e.source)} blocked={new Set(steps.filter((s) => s.key !== selNode.key && wouldCycle(edgesOf(plan), s.key, selNode.key)).map((s) => s.key))} onDep={(src, on) => toggleDep(selNode.key, src, on)} onPatch={(p) => patch(selNode.key, p)} onDelete={() => remove(selNode.key)} /> : null}</aside>}
     </div>
     <RunDialog wf={runWf} onClose={() => setRunWf(undefined)} onLaunched={(oid) => { setRunId(oid); setSel(null); }} />
     <AgentCockpit task={cockpitTask} orch={runOrch ?? { project_id: "" }} handoffs={runHs ?? []} onClose={() => { setSel(null); setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n))); }} onChanged={reloadRun} />
@@ -142,52 +127,5 @@ function StudioInner() {
   </div>;
 }
 
-function PaletteItem({ kind, role, label, hint, rail, onAdd }: { kind: Kind; role?: string; label: string; hint?: string; rail?: boolean; onAdd: () => void }) {
-  const K = styleOf(kind, role ?? ""); const I = K.icon;
-  return <button type="button" draggable onDragStart={(e) => { e.dataTransfer.setData("application/acc-node", JSON.stringify({ kind, role })); e.dataTransfer.effectAllowed = "copy"; }} onClick={onAdd} title={rail ? label : hint ?? K.hint} aria-label={label} className="flex items-center gap-2.5 h-9 px-2 rounded-xl border border-transparent hover:border-line-strong hover:bg-raised text-left text-[13px] cursor-grab active:cursor-grabbing transition-colors"><span className="w-6 h-6 rounded-lg grid place-items-center shrink-0" style={{ background: `color-mix(in srgb, ${K.color} 16%, transparent)`, color: K.color }}><I size={13} /></span>{!rail && <span className="truncate">{label}</span>}</button>;
-}
-
-function Inspector({ node, incoming, onPatch, onDelete }: { node: SNode; incoming: number; onPatch: (p: Partial<SNode>) => void; onDelete: () => void }) {
-  const K = styleOf(node.kind, node.role); const I = K.icon;
-  return <div className="space-y-4"><div className="flex items-center gap-2.5"><span className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: `color-mix(in srgb, ${K.color} 16%, transparent)`, color: K.color }}><I size={18} /></span><div className="min-w-0"><div className="font-semibold text-[14px]">{K.label}</div><div className="text-2xs text-muted mono truncate">{node.key}</div></div></div>
-    <Field label="Titre"><input className="input" value={node.title} maxLength={80} onChange={(e) => onPatch({ title: e.target.value })} /></Field>
-    {node.kind === "agent" && <>
-      <Field label="Rôle de l'agent"><select className="input" value={node.role} onChange={(e) => onPatch({ role: e.target.value })}>{ROLES.filter(([r]) => r !== "orchestrator").map(([r, l]) => <option key={r} value={r}>{l}</option>)}</select></Field>
-      <div><label className="label">Fournisseur</label><div role="radiogroup" aria-label="Fournisseur" className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-bg border border-line">{([[undefined, "Auto"], ["claude", "Claude"], ["codex", "Codex"]] as const).map(([v, l]) => <button key={l} type="button" role="radio" aria-checked={node.provider === v} onClick={() => onPatch({ provider: v })} className={`h-8 rounded-lg text-[13px] transition-colors ${node.provider === v ? "bg-panel border border-line-strong font-medium" : "text-muted hover:text-fg border border-transparent"}`}>{l}</button>)}</div></div>
-      <Field label="Instructions" hint="{{goal}} sera remplacé par l'objectif au lancement. Les agents voient le travail des étapes précédentes."><textarea className="input" rows={7} value={node.description ?? ""} onChange={(e) => onPatch({ description: e.target.value })} placeholder="Ce que cet agent doit faire, précisément." /></Field></>}
-    {node.kind === "test" && <Field label="Commande" hint="Exécutée dans le dossier du projet, après votre confirmation au lancement."><input className="input mono" value={node.command ?? ""} onChange={(e) => onPatch({ command: e.target.value })} placeholder="npm test" /></Field>}
-    {(node.kind === "approval" || node.kind === "notification") && <Field label="Message"><textarea className="input" rows={4} value={node.description ?? ""} onChange={(e) => onPatch({ description: e.target.value })} placeholder={node.kind === "approval" ? "Ce que vous devez vérifier avant de continuer" : "Texte de la notification"} /></Field>}
-    {node.kind === "agent" && <label className="flex items-start gap-2.5 text-[13px] cursor-pointer rounded-xl border border-line p-3 hover:bg-raised"><input type="checkbox" className="mt-0.5 w-4 h-4 accent-[var(--accent)]" checked={!!node.gate} onChange={(e) => onPatch({ gate: e.target.checked })} /><span><span className="font-medium flex items-center gap-1.5"><ShieldAlert size={13} className="text-warning" />Validation avant exécution</span><span className="text-xs text-muted block mt-0.5">L'orchestrateur attend votre accord avant de lancer cet agent.</span></span></label>}
-    <p className="text-xs text-muted">{incoming === 0 ? "Première étape : lancée directement par l'orchestrateur." : `Attend ${incoming} étape(s) précédente(s) ; reçoit leur résultat.`}</p>
-    <button className="btn btn-sm w-full !text-danger" onClick={onDelete}><Trash2 size={13} />Supprimer l'étape</button></div>;
-}
-
-function OrchPanel({ count, onWt, onPropose }: { count: number; onWt: (v: boolean) => void; onPropose: () => void }) {
-  const [wt, setWt] = useState(false);
-  return <div className="space-y-4"><div className="flex items-center gap-2.5"><span className="w-10 h-10 rounded-2xl grid place-items-center text-white" style={{ background: "linear-gradient(135deg, #b4532c, #e0865f)" }}><Crown size={20} /></span><div><div className="font-semibold text-[15px]">Agent orchestrateur</div><div className="text-xs text-muted">supervise {count} étape(s)</div></div></div>
-    <ul className="text-[13px] text-fg2 space-y-1.5 list-disc pl-4"><li>Lance chaque étape quand ses prédécesseurs sont terminées ; les branches indépendantes tournent en parallèle.</li><li>Respecte les limites de concurrence et les permissions de chaque rôle.</li><li>Transmet le résultat d'une étape à la suivante.</li><li>Met le workflow en pause si une étape échoue : vous relancez ou corrigez.</li><li>S'arrête aux étapes de validation et attend votre accord.</li></ul>
-    <p className="text-xs text-muted rounded-xl border border-line p-3">L'ordre, la concurrence et les autorisations sont gérés par le moteur local, de façon déterministe. L'IA ne fait que <i>proposer</i> un graphe, que vous validez.</p>
-    <label className="flex items-start gap-2.5 text-[13px] cursor-pointer"><input type="checkbox" className="mt-0.5 w-4 h-4 accent-[var(--accent)]" checked={wt} onChange={(e) => { setWt(e.target.checked); onWt(e.target.checked); }} /><span>Isoler les étapes qui écrivent dans des worktrees Git<span className="text-xs text-muted block">Évite les conflits entre agents parallèles (dépôt Git requis). Réglable aussi au lancement.</span></span></label>
-    <button className="btn w-full" onClick={onPropose}><Wand2 size={14} />Proposer un graphe</button></div>;
-}
-
-/** L'orchestrateur (Claude ou Codex, lecture seule) propose un graphe pour un objectif ; rien n'est exécuté et l'orchestration technique créée pour la proposition est annulée aussitôt. */
-function ProposeDialog({ open, onClose, hasNodes, onPlan }: { open: boolean; onClose: () => void; hasNodes: boolean; onPlan: (t: SNode[]) => void }) {
-  const { data: projects } = useData<any[]>("projects.list", [], { enabled: open }); const [pid, setPid] = useState(""); const [goal, setGoal] = useState(""); const [prov, setProv] = useState<"claude" | "codex">("claude"); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
-  useEffect(() => { if (projects?.length && !pid) setPid(projects[0].id); }, [projects]);
-  const go = async () => {
-    if (hasNodes && !(await confirmDialog({ title: "Remplacer le graphe actuel ?", body: "Le canevas sera remplacé par la proposition de l'orchestrateur.", confirmLabel: "Remplacer", danger: true }))) return;
-    setBusy(true); setErr(""); let oid = "";
-    try { oid = await api("orch.create", { projectId: pid, goal, mode: "assisted", plannerProvider: prov }); let o: any; for (let i = 0; i < 120; i++) { await new Promise((r) => setTimeout(r, 2000)); o = await api("orch.get", oid); if (o.status === "awaiting_approval" && o.plan_json) break; if (o.status === "draft" && o.error) throw new Error(o.error); if (["cancelled", "failed"].includes(o.status)) throw new Error(o.error ?? "Planification interrompue."); }
-      if (!o?.plan_json) throw new Error("L'orchestrateur n'a pas répondu à temps."); const p = JSON.parse(o.plan_json); onPlan(p.tasks); onClose(); toast("Graphe proposé : relisez-le, ajustez-le, puis enregistrez.", "success"); }
-    catch (e: any) { setErr(errMsg(e)); } finally { if (oid) void api("orch.cancel", oid).catch(() => {}); setBusy(false); }
-  };
-  return <Modal open={open} onClose={() => !busy && onClose()} title="Proposer un graphe" footer={<><button className="btn" disabled={busy} onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={busy || !pid || !goal.trim()} onClick={go}>{busy ? <><Loader2 size={14} className="animate-spin" />L'orchestrateur réfléchit…</> : <><Sparkles size={14} />Proposer</>}</button></>}>
-    {!projects?.length ? <p className="text-fg2">Ajoutez d'abord un projet : l'orchestrateur lit son contenu pour proposer un graphe adapté.</p> : <>
-      <Field label="Objectif"><textarea className="input" rows={3} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Ex. Ajouter un système de commentaires avec tests et revue de sécurité" /></Field>
-      <Field label="Projet"><select className="input" value={pid} onChange={(e) => setPid(e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-      <Field label="Qui propose ?"><select className="input" value={prov} onChange={(e) => setProv(e.target.value as any)}><option value="claude">Claude Code</option><option value="codex">Codex</option></select></Field>
-      <p className="text-xs text-muted">Un agent en lecture seule étudie le projet (quelques minutes, un appel à votre abonnement). Aucun fichier n'est modifié et rien n'est lancé.</p>{err && <p role="alert" className="text-[13px] text-danger mt-2">{err}</p>}</>}</Modal>;
-}
 
 export default function Studio() { return <ReactFlowProvider><StudioInner /></ReactFlowProvider>; }

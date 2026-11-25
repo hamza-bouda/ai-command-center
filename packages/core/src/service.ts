@@ -127,7 +127,10 @@ export function createCore(opts: { dataDir: string; dbFile?: string; adapters?: 
       usage: (id: string) => all(db, "SELECT u.*, c.calculated_usd, c.status pricing_status, c.detail pricing_detail FROM usage_events u LEFT JOIN cost_estimates c ON c.usage_event_id=u.id WHERE u.execution_id=? ORDER BY u.created_at", id),
       pendingApprovals: () => all(db, "SELECT * FROM approvals WHERE status='pending' ORDER BY created_at") },
     // --- analytics
-    analytics: { totals: (f?: A.UsageFilter) => A.usageTotals(db, f), by: (b: A.GroupBy, f?: A.UsageFilter, l?: number) => A.usageBy(db, b, f, l), series: (b: any, f?: A.UsageFilter) => A.usageSeries(db, b, f), rows: (f?: A.UsageFilter) => A.usageRows(db, f), execStats: (f?: any) => A.executionStats(db, f), export: (f: A.UsageFilter, fmt: "csv" | "json") => A.exportRows(db, f, fmt) },
+    analytics: { roles: () => all<any>(db, `SELECT t.role role, COUNT(*) runs, SUM(CASE WHEN e.status='completed' THEN 1 ELSE 0 END) ok, SUM(CASE WHEN e.status IN ('failed','interrupted') THEN 1 ELSE 0 END) failed,
+        ROUND(AVG(e.duration_ms)) avg_ms, ROUND(AVG((SELECT COALESCE(SUM(total),0) FROM usage_events u WHERE u.execution_id=e.id))) avg_tokens, AVG((SELECT COALESCE(SUM(c.calculated_usd),0) FROM usage_events u JOIN cost_estimates c ON c.usage_event_id=u.id WHERE u.execution_id=e.id)) avg_usd
+        FROM agent_executions e JOIN tasks t ON t.id=e.task_id WHERE t.role IS NOT NULL AND t.node_kind='agent' AND e.status IN ('completed','failed','interrupted') GROUP BY t.role ORDER BY runs DESC`),
+      totals: (f?: A.UsageFilter) => A.usageTotals(db, f), by: (b: A.GroupBy, f?: A.UsageFilter, l?: number) => A.usageBy(db, b, f, l), series: (b: any, f?: A.UsageFilter) => A.usageSeries(db, b, f), rows: (f?: A.UsageFilter) => A.usageRows(db, f), execStats: (f?: any) => A.executionStats(db, f), export: (f: A.UsageFilter, fmt: "csv" | "json") => A.exportRows(db, f, fmt) },
     dashboard() {
       const d = new Date(); const startDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
       const startWeek = new Date(Date.now() - 7 * 864e5).toISOString(); const startMonth = new Date(Date.now() - 30 * 864e5).toISOString();

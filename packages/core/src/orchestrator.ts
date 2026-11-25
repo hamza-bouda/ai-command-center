@@ -1,3 +1,4 @@
+import { getSetting } from "./settings.js";
 import { DB, all, one, run, uid, now, tx } from "./db.js";
 import type { EventBus } from "./events.js";
 import type { ExecutionManager } from "./execution.js";
@@ -219,7 +220,7 @@ ${out}`.slice(0, 22000), now(), code === 0 ? "done" : "blocked", t.id);
   /** Anciennes transmissions enregistrées avec une taille de 0 : recalculée depuis leur contenu (idempotent). */
   backfillHandoffSizes() { for (const h of all<any>(this.db, "SELECT id, payload FROM handoffs WHERE chars IS NULL OR chars=0")) { try { const n = renderHandoff(JSON.parse(h.payload)).length; if (n > 0) run(this.db, "UPDATE handoffs SET chars=? WHERE id=?", n, h.id); } catch { /* contenu illisible : laissé tel quel */ } } }
   /** Au démarrage : les orchestrations « running » dont les exécutions ont été interrompues passent en pause. */
-  reconcile() { for (const o of all<any>(this.db, "SELECT id FROM orchestrations WHERE status IN ('running','planning')")) { const live = one(this.db, "SELECT 1 x FROM agent_executions e JOIN tasks t ON t.id=e.task_id WHERE t.orchestration_id=? AND e.status IN ('queued','preparing','running','waiting_approval')", o.id); if (!live) { run(this.db, "UPDATE tasks SET status='blocked' WHERE orchestration_id=? AND status='in_progress'", o.id); this.setStatus(o.id, "paused", { error: "Application redémarrée : reprenez l'orchestration pour relancer les étapes interrompues." }); } } }
+  reconcile() { for (const o of all<any>(this.db, "SELECT id FROM orchestrations WHERE status IN ('running','planning')")) { const live = one(this.db, "SELECT 1 x FROM agent_executions e JOIN tasks t ON t.id=e.task_id WHERE t.orchestration_id=? AND e.status IN ('queued','preparing','running','waiting_approval')", o.id); if (!live) { run(this.db, "UPDATE tasks SET status='blocked' WHERE orchestration_id=? AND status='in_progress'", o.id); this.setStatus(o.id, "paused", { error: "Application redémarrée : reprenez l'orchestration pour relancer les étapes interrompues." }); if (getSetting<boolean>(this.db, "orchestrator.autoResume", false)) { const oid = o.id; setTimeout(() => { void this.resume(oid).catch(() => {}); }, 2000); } } } }
 
   private finish(o: any, tasks: any[]) {
     const hs = this.handoffs(o.id); const tot = tasks.reduce((a, t) => ({ tok: a.tok + (t.tokens ?? 0), usd: a.usd + (t.usd ?? 0) }), { tok: 0, usd: 0 });

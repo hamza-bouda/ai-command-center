@@ -17,4 +17,9 @@ describe("journal d'exécution : fin seulement", () => {
     for (let i = 1; i <= 60; i++) run(c.db, "INSERT INTO exec_logs (execution_id,kind,content,at) VALUES (?,?,?,?)", ex, "text", `l${i}`, now());
     const t = c.executions.logs(ex, 0, 5) as any[]; expect(t.map((r) => r.content)).toEqual(["l56", "l57", "l58", "l59", "l60"]); expect((c.executions.logs(ex, 0) as any[]).length).toBe(60); expect((c.executions.logs(ex, 0, 9999) as any[]).length).toBe(60);
   });
+  it("mur de 12 agents : 12 lectures de fin de journal sur de gros journaux restent instantanées", () => {
+    const c = createCore({ dataDir: "x", dbFile: ":memory:" }); const pid = c.projects.create({ name: "P", path: process.cwd() }); const ids: string[] = [];
+    for (let k = 0; k < 12; k++) { const ex = uid(); ids.push(ex); run(c.db, "INSERT INTO agent_executions (id,project_id,provider,prompt,cwd,status,attempt,priority,created_at) VALUES (?,?,?,?,?,?,?,?,?)", ex, pid, "claude", "p", process.cwd(), "running", 1, 5, now()); c.db.exec("BEGIN"); const ins = c.db.prepare("INSERT INTO exec_logs (execution_id,kind,content,at) VALUES (?,?,?,?)"); for (let i = 0; i < 4000; i++) ins.run(ex, "text", "ligne " + i, now()); c.db.exec("COMMIT"); }
+    const t0 = performance.now(); for (const id of ids) expect((c.executions.logs(id, 0, 72) as any[]).length).toBe(72); const ms = performance.now() - t0; expect(ms).toBeLessThan(250);
+  });
 });

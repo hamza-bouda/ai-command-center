@@ -53,6 +53,11 @@ export class Workflows {
   }
   /** Validation à blanc d'un graphe en cours d'édition (erreurs bloquantes et avertissements), sans rien enregistrer. */
   check(nodes: unknown, useWorktrees = false) { const c = validatePlan({ tasks: nodes }, { useWorktrees }); return { ok: c.ok, errors: c.errors, warnings: c.warnings }; }
+  /** Enregistre le plan d'une orchestration réussie comme nouveau workflow réutilisable (positions et objectif remplacés par {{goal}} laissés à l'utilisateur). */
+  fromOrchestration(orchId: string, name: string) {
+    const o = this.orch.get(orchId); if (!o) throw new Error("Orchestration introuvable"); if (!o.plan_json) throw new Error("Cette orchestration n'a pas de plan à enregistrer.");
+    const plan = JSON.parse(o.plan_json) as { tasks: unknown[] }; return this.save({ name: name || `${String(o.goal).slice(0, 40)} (modèle)`, description: `Créé depuis une exécution du ${new Date(o.created_at).toLocaleDateString("fr-FR")}.`, nodes: plan.tasks });
+  }
   duplicate(id: string) { const w = this.get(id); if (!w) throw new Error("Workflow introuvable"); return this.save({ name: `${w.name} (copie)`, description: w.description, nodes: w.nodes }); }
   remove(id: string) { const w = one<any>(this.db, "SELECT builtin FROM workflows WHERE id=?", id); if (!w) return; if (w.builtin) throw new Error("Un modèle livré ne peut pas être supprimé."); run(this.db, "DELETE FROM workflows WHERE id=?", id); }
   /** Commandes qui seront exécutées dans le projet (à confirmer côté interface avant lancement). */

@@ -13,6 +13,18 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm audit --omit=dev
+  e2e:
+    # Tests de bout en bout sans IA : l'application construite est lancée et pilotée (atelier, mémoire, connaissances, terminal, pages).
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run build -w @acc/desktop
+      - run: node tools/e2e/run.mjs
+        timeout-minutes: 10
   build:
     # Construit seulement : l'installateur Windows est vérifié à la main ; macOS et Linux sont compilés mais jamais testés.
     needs: test

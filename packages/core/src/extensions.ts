@@ -69,7 +69,7 @@ export class Extensions {
     const INIT = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "ai-command-center", version: "0.1.0" } } };
     if (cfg.transport === "http") {
       try { const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 10000); const r = await fetch(cfg.url!, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(cfg.headers ?? {}) }, body: JSON.stringify(INIT), signal: ctl.signal }); clearTimeout(to);
-        if (r.status === 401 || r.status === 403) return fail(`Authentification requise (HTTP ${r.status}).`); if (!r.ok) return fail(`Réponse HTTP ${r.status}.`); return { ok: true, tools: [], ms: Date.now() - t0 }; } catch (e: any) { return fail(e.name === "AbortError" ? "Délai dépassé (10 s)." : String(e.message)); }
+        if (r.status === 401 || r.status === 403) return fail(`Authentification requise (HTTP ${r.status}) : ce serveur utilise probablement une connexion en ligne (OAuth). Connectez-le avec la commande officielle affichée sur sa carte (« Ce serveur demande une connexion en ligne »), puis relancez le test. Si le serveur attend une clé, ajoutez-la dans ses en-têtes (ex. Authorization).`); if (!r.ok) return fail(`Réponse HTTP ${r.status}.`); return { ok: true, tools: [], ms: Date.now() - t0 }; } catch (e: any) { return fail(e.name === "AbortError" ? "Délai dépassé (10 s)." : String(e.message)); }
     }
     if (!cfg.command?.trim()) return fail("Commande manquante.");
     return await new Promise((res) => {

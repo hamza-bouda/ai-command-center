@@ -155,7 +155,7 @@ Tout ce qui figure dans les sections ci-dessous est implémenté et a été test
 
 **Distribution**
 - Installateur **non signé** (certificat de signature de code requis) ; **Windows seulement**, macOS et Linux ne sont ni construits ni testés.
-- Mise à jour automatique : la détection d'une nouvelle version est testée, pas le téléchargement ni l'installation, et aucun serveur de mises à jour n'est configuré.
+- Mise à jour automatique : la détection est testée sur la version installée (Releases GitHub), pas le téléchargement ni l'installation d'une version plus récente.
 - Une intégration continue (GitHub Actions) vérifie les types, les tests et les vulnérabilités à chaque envoi ; elle compile aussi macOS et Linux, **sans jamais les tester**. Licence MIT. Pas de signature de code (certificat payant).
 
 **Fiabilité**
@@ -332,7 +332,8 @@ Les JSON invalides sont affichés tels quels avec un message, sans faire échoue
 | **Comparer deux exécutions** | Workflows › Détails › Exécutions | Cochez deux exécutions : état, durée, tokens et équivalent API étape par étape, avec l'écart. |
 | **Performance par rôle** | Consommation | Réussite, durée, tokens et équivalent API moyens de chaque rôle d'agent. |
 | **Reprise automatique** | Paramètres › Application | Option (désactivée par défaut) : les orchestrations interrompues par un redémarrage reprennent seules. |
-| **Mises à jour** | Paramètres › Application | Vérification manuelle auprès des Releases GitHub du projet (`latest.yml` publié avec l'installateur) ; **jamais essayée de bout en bout** faute d'une Release plus récente que l'application installée. |
+| **Mises à jour** | Paramètres › Application | Vérification manuelle auprès des Releases GitHub du projet (`latest.yml` publié avec l'installateur) ; la vérification a été testée sur la version installée (elle lit `latest.yml` de la Release v0.2.8 et répond « à jour ») ; **le téléchargement et l'installation d'une version plus récente n'ont pas encore été essayés** (il faudra une Release suivante). |
+| **Convertisseur de documents** | Chat, Connaissances | Un vrai PDF a été converti en texte par MarkItDown (installé dans un dossier isolé) : texte extrait à l'identique, environ 2 s. Le glisser-déposer d'un fichier n'a pas pu être simulé par mes outils ; la conversion elle-même est vérifiée. |
 | **Test de notification** | Paramètres › Notifications | Bouton « Tester » : la bulle du bureau n'a jamais pu être constatée à l'écran par mes essais. |
 | **Barre de titre intégrée** | Fenêtre principale | Aux couleurs du thème (Windows/Linux) ; l'en-tête sert de zone de déplacement. |
 

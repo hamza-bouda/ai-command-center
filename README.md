@@ -338,6 +338,7 @@ Les JSON invalides sont affichés tels quels avec un message, sans faire échoue
 | **Insérer un workflow** | Atelier › palette | Insère un workflow existant comme groupe d'étapes (clés renommées, liens internes conservés) ; testé. |
 | **Cockpit dans les Tâches** | Tâches › Exécutions | « Ouvrir le cockpit de cette tentative » : terminal, interface, contexte, résultat. Testé. |
 | **Accessibilité automatique** | `npm run e2e` | axe-core (WCAG 2 A et AA) sur 10 pages et 2 thèmes : aucune violation sérieuse ou critique. **Ne remplace pas un test avec un lecteur d'écran**, jamais fait. |
+| **Fichiers à télécharger** | Réponses (Chat, Work, Code) | Bloc ```` ```file ```` : l'IA livre un fichier complet (notebook, code, csv…) ; l'interface affiche une carte avec **Enregistrer** et **Copier**, et vérifie les notebooks (cellules, JSON valide). Le Chat n'a aucun outil de fichier : c'est l'interface qui enregistre. Testé en réel avec un notebook envoyé à Claude. Limites : texte seulement (pas de binaire), et un fichier très long dépend de la longueur de réponse du modèle. |
 | **Barre de titre intégrée** | Fenêtre principale | Aux couleurs du thème (Windows/Linux) ; l'en-tête sert de zone de déplacement. |
 
 ## Confort d'usage (huit fonctions)

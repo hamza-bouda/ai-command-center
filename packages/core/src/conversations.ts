@@ -23,6 +23,7 @@ export const RICH_PROMPT = [
   "- ```chart : graphique {\"type\":\"bar|line|area|pie\",\"title\":\"…\",\"x\":\"clé\",\"series\":[\"clé numérique\"],\"data\":[{…}]}.",
   "- ```mermaid : diagramme. ```artifact : page HTML complète autonome (CSS/JS en ligne, aucun réseau) affichée en aperçu interactif. ```svg : image.",
   "- Formules LaTeX : $$…$$.",
+  "- ```file : livrer un FICHIER COMPLET à télécharger (notebook .ipynb, code, csv, md…) : première ligne `name: nom.ext`, puis le contenu intégral du fichier, sans le tronquer ni le résumer. Si le contenu contient des ```, ouvre et ferme ce bloc avec 4 backticks. L'interface affiche un bouton Enregistrer : ne demande jamais à l'utilisateur de copier-coller, et ne dis pas que tu ne peux pas produire de fichier.",
   "Emploie-les quand ils servent vraiment (quiz, données à comparer, schéma, choix à faire) ; le JSON doit être valide. N'utilise jamais l'outil AskUserQuestion : il n'existe pas ici.",
 ].join("\n");
 const ACTIVE = ["queued", "preparing", "running", "waiting_approval"];

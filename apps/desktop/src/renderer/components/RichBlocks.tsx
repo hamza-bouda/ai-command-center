@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Copy, CheckCircle2, XCircle, RotateCcw, MessageSquareText, Maximize2, Download, Code2, Eye, Brain, Loader2, ListChecks, BarChart3, GitBranch, ChevronLeft, ChevronRight, Send } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
-import { currentTheme } from "../theme"; import { api } from "../api"; import { toast } from "../overlay"; import { Modal } from "../ui";
+import { FileBlock } from "./FileBlock"; import { currentTheme } from "../theme"; import { api } from "../api"; import { toast } from "../overlay"; import { Modal } from "../ui";
 
 /** Actions de la conversation disponibles pour les blocs interactifs (envoyer une réponse cliquée au modèle). Absent hors conversation : les blocs deviennent en lecture seule. */
 export const ChatActions = createContext<{ send?: (text: string) => void; busy?: boolean }>({});
@@ -162,11 +162,11 @@ function ImageBlock({ raw }: { raw: string }) {
     <Modal open={big} onClose={() => setBig(false)} width="max-w-4xl" title="Image générée" footer={<button className="btn" onClick={save}><Download size={14} />Enregistrer</button>}><img src={src} alt={alt} className="max-w-full max-h-[70vh] mx-auto rounded-xl" /></Modal></figure>;
 }
 /** Langages de blocs de code rendus de façon interactive. ```artifact = page HTML complète exécutée dans un cadre isolé (```html reste du code affiché tel quel). */
-export const RICH_LANGS = new Set(["memory", "image", "quiz", "qcm", "choices", "chart", "mermaid", "artifact", "svg", "html"]);
+export const RICH_LANGS = new Set(["file", "memory", "image", "quiz", "qcm", "choices", "chart", "mermaid", "artifact", "svg", "html"]);
 export function richBlock(lang: string, code: string): ReactNode | null {
   switch (lang) {
     case "quiz": case "qcm": return <QuizBlock raw={code} />; case "choices": return <ChoicesBlock raw={code} />; case "chart": return <ChartBlock raw={code} />; case "mermaid": return <MermaidBlock code={code} />;
-    case "image": return <ImageBlock raw={code} />; case "memory": return <MemoryBlock raw={code} />;
+    case "image": return <ImageBlock raw={code} />; case "memory": return <MemoryBlock raw={code} />; case "file": return <FileBlock raw={code} />;
     case "artifact": return <ArtifactBlock code={code} kind="html" />; case "html": return /^\s*(<!doctype html|<html[\s>])/i.test(code) ? <ArtifactBlock code={code} kind="html" /> : null;
     case "svg": return /<\s*svg/i.test(code) ? <ArtifactBlock code={code} kind="svg" /> : null; default: return null;
   }

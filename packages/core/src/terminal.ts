@@ -12,7 +12,7 @@ const BUF_MAX = 400_000; // octets de scrollback conservés côté processus pri
 interface Term { info: TerminalInfo; pty: any; buf: string; total: number }
 type PtyModule = { spawn(file: string, args: string[], opts: any): any };
 let ptyMod: PtyModule | undefined;
-const loadPty = (): PtyModule => (ptyMod ??= createRequire((typeof __dirname !== "undefined" ? __dirname : process.cwd()) + "/")("@lydell/node-pty") as PtyModule);
+export const loadPty = (): PtyModule => (ptyMod ??= createRequire((typeof __dirname !== "undefined" ? __dirname : process.cwd()) + "/")("@lydell/node-pty") as PtyModule);
 
 /** Environnement d'un terminal : retire les variables de facturation API (les deux fournisseurs) et l'état des sessions Claude Code parentes. */
 export function terminalEnv(exclusive: boolean, env = process.env): NodeJS.ProcessEnv {

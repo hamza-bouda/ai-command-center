@@ -11,7 +11,7 @@ const artifacts = new Map<string, string>();
 const ARTIFACT_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, sep, resolve } from "node:path";
-import { createCore, type Core } from "@acc/core";
+import { createCore, connectMcp, cancelConnect, claudeStatus, type Core } from "@acc/core";
 import { autoUpdater } from "electron-updater";
 
 let core: Core; let win: BrowserWindow | null = null; let pickedRestore: string | null = null;
@@ -69,6 +69,10 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
     "ext.testSaved": async (id: string) => { const e = (c.db.prepare("SELECT * FROM extensions WHERE id=? AND kind='mcp'").get(id) as any); if (!e) throw new Error("Serveur introuvable"); return c.extensions.test(JSON.parse(e.config)); },
     "ext.importSkillPath": (p: string, modes?: any[]) => { if (!c.system.skills().some((s: any) => s.path === p)) throw new Error("Skill non détectée dans les dossiers connus."); return c.extensions.importSkill(p, modes); },
     "artifact.put": (html: unknown) => { const s = String(html ?? ""); if (s.length > 1_000_000) throw new Error("Aperçu trop volumineux (1 Mo maximum)."); const id = randomUUID(); artifacts.set(id, s); if (artifacts.size > 100) artifacts.delete(artifacts.keys().next().value as string); return id; },
+    "ext.connect": async (id: unknown, provider: unknown, o: any) => { const e = c.extensions.list("mcp").find((x: any) => x.id === String(id)) as any; if (!e || e.config.transport !== "http") throw new Error("Serveur MCP distant introuvable."); const prov = provider === "codex" ? "codex" : "claude";
+      return connectMcp({ provider: prov, name: e.name, url: e.config.url, dir: join(app.getPath("userData"), "mcp-auth"), exclusive: !!c.settings.get("billing.exclusive", true), clientId: o?.clientId ? String(o.clientId).trim() : undefined, clientSecret: o?.clientSecret ? String(o.clientSecret) : undefined, callbackPort: o?.callbackPort ? Number(o.callbackPort) : undefined, onUrl: (u) => { if (/^https:\/\//.test(u)) void shell.openExternal(u); } }); },
+    "ext.connectCancel": (id: unknown, provider: unknown) => { const e = c.extensions.list("mcp").find((x: any) => x.id === String(id)) as any; return e ? cancelConnect(provider === "codex" ? "codex" : "claude", e.name) : false; },
+    "ext.authStatus": (id: unknown) => { const e = c.extensions.list("mcp").find((x: any) => x.id === String(id)) as any; if (!e || e.config.transport !== "http") return null; return claudeStatus(e.name, join(app.getPath("userData"), "mcp-auth"), !!c.settings.get("billing.exclusive", true)); },
     "notifications.test": () => { const supported = Notification.isSupported(); if (supported) new Notification({ title: "AI Command Center", body: "Test : les notifications du bureau fonctionnent." }).show(); return { supported }; },
     "wf.fromOrchestration": (id: unknown, name: unknown) => c.workflows.fromOrchestration(String(id), String(name ?? "").trim().slice(0, 60)),
     "analytics.roles": () => c.analytics.roles(),

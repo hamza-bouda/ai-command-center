@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Plus, RefreshCw, Search, Wrench, Plug, Info, Trash2, FlaskConical, FolderInput, AlertTriangle, CheckCircle2, XCircle, Puzzle, Sparkles, FileText, Check, Copy } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, RefreshCw, Search, Wrench, Plug, Info, Trash2, FlaskConical, FolderInput, AlertTriangle, CheckCircle2, XCircle, Puzzle, Sparkles, FileText, Check, Copy, Loader2, ExternalLink } from "lucide-react";
 import { api } from "../api"; import { useData } from "../hooks"; import { useT } from "../i18n"; import { toast, confirmDialog } from "../overlay";
 import { ConverterSetupModal } from "../components/attachFlow";
 import { Page, Card, Badge, EmptyState, ErrorState, LoadingSkeleton, Tabs, Skeleton, Modal, Field, Segmented } from "../ui";
@@ -68,7 +68,7 @@ function Mine() {
         <div className="flex items-start gap-3 mb-2"><span className="w-9 h-9 rounded-xl bg-raised border border-line grid place-items-center text-fg2 shrink-0">{isMcp ? <Plug size={16} /> : <Sparkles size={16} />}</span><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h3 className="font-semibold truncate">{e.name}</h3><span className="text-2xs text-muted border border-line rounded px-1.5">{isMcp ? (e.config.transport === "http" ? "MCP distant" : "MCP local") : "Skill"}</span></div>
           <p className="text-xs text-muted truncate mono mt-0.5" title={isMcp ? e.config.url ?? e.config.command : e.config.description}>{isMcp ? e.config.url ?? [e.config.command, ...(e.config.args ?? [])].join(" ") : e.config.description || "Aucune description"}</p></div>
           <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer shrink-0"><input type="checkbox" checked={e.enabled} onChange={async (x) => { await api("ext.setEnabled", e.id, x.target.checked); reload(); }} aria-label={`Activer ${e.name}`} />{e.enabled ? "Active" : "Pause"}</label></div>
-        {isMcp && e.config.transport === "http" && /^https:\/\/[^\s"'`$;&|<>]+$/.test(e.config.url ?? "") && <OAuthHint name={e.name} url={e.config.url} auto={/401|403|OAuth/.test(String(t?.error ?? ""))} />}
+        {isMcp && e.config.transport === "http" && /^https:\/\/[^\s"'`$;&|<>]+$/.test(e.config.url ?? "") && <OAuthHint extId={e.id} name={e.name} url={e.config.url} auto={/401|403|OAuth/.test(String(t?.error ?? ""))} />}
         {isMcp && (e.config.envKeys?.length > 0 || e.config.headerKeys?.length > 0) && <p className="text-2xs text-muted mb-2">Secrets stockés localement : {[...(e.config.envKeys ?? []), ...(e.config.headerKeys ?? [])].join(", ")} (valeurs masquées)</p>}
         <div className="mb-3"><span className="text-2xs text-muted block mb-1">Utilisable dans</span><ModeChips value={e.modes} onChange={async (m) => { await api("ext.setModes", e.id, m); reload(); }} />{isMcp && e.modes.includes("chat") && <p className="text-2xs text-warning mt-1">Outils autorisés en Chat.</p>}</div>
         {t && !t.busy && <div className={`text-xs mb-3 ${t.ok ? "text-success" : "text-danger"}`}>{t.ok ? `Connexion réussie (${t.ms} ms)${t.tools?.length ? ` · ${t.tools.map((x: any) => x.name).join(", ")}` : ""}` : t.error}</div>}
@@ -76,12 +76,33 @@ function Mine() {
     <AddMcp open={mcp} onClose={() => setMcp(false)} onAdded={reload} /><AddSkill open={skill} onClose={() => setSkill(false)} onAdded={reload} /></div>;
 }
 
-/** Serveur distant qui exige une connexion en ligne (OAuth) : l'application ne la fait jamais elle-même ; la commande officielle de Codex s'exécute dans votre terminal. */
-function OAuthHint({ name, url, auto }: { name: string; url: string; auto?: boolean }) {
-  const [open0, setOpen] = useState<boolean | undefined>(undefined); const open = open0 ?? !!auto; const [ok, setOk] = useState(false); const cmd = `codex mcp login -c 'mcp_servers.${name}.url="${url}"' ${name}`;
-  return <div className="mb-2"><button className="text-2xs text-accent hover:underline" onClick={() => setOpen(!open)}>{open ? "Masquer" : "Ce serveur demande une connexion en ligne (OAuth) ?"}</button>
-    {open && <div className="mt-1.5 rounded-lg border border-line p-2.5"><p className="text-2xs text-muted mb-1.5">Avec Codex, lancez cette commande officielle dans un terminal : la page de connexion s'ouvre dans votre navigateur et Codex garde le jeton lui-même (l'application ne le voit jamais). Non vérifié ici avec un vrai serveur OAuth ; Claude Code gère ses connexions MCP depuis son propre outil (<span className="mono">/mcp</span>).</p>
-      <div className="flex items-center gap-1.5"><code className="mono text-2xs flex-1 break-all select-text">{cmd}</code><button className="btn btn-ghost btn-icon !h-7 !w-7" aria-label="Copier la commande" onClick={() => { void navigator.clipboard?.writeText(cmd).catch(() => {}); setOk(true); setTimeout(() => setOk(false), 1400); }}>{ok ? <Check size={13} /> : <Copy size={13} />}</button></div></div>}</div>;
+/**
+ * Connexion d'un serveur MCP distant qui demande une authentification : l'application lance la commande de connexion OFFICIELLE de chaque CLI,
+ * qui ouvre la page web d'autorisation ; les jetons restent chez Claude Code et Codex (jamais lus ici).
+ */
+function OAuthHint({ extId, name, url, auto }: { extId: string; name: string; url: string; auto?: boolean }) {
+  const [open0, setOpen] = useState<boolean | undefined>(undefined); const open = open0 ?? !!auto; const [busy, setBusy] = useState<"" | "claude" | "codex">(""); const [res, setRes] = useState<Record<string, { ok: boolean; message: string; needsClient?: boolean }>>({});
+  const [adv, setAdv] = useState(false); const [cid, setCid] = useState(""); const [sec, setSec] = useState(""); const [port, setPort] = useState(""); const [st, setSt] = useState<any>(null); const [ok, setOk] = useState(false);
+  const refresh = async () => { try { setSt(await api("ext.authStatus", extId)); } catch { /* indisponible */ } };
+  useEffect(() => { if (open) void refresh(); }, [open]);
+  const go = async (provs: ("claude" | "codex")[]) => { for (const p of provs) { setBusy(p); setRes((r) => ({ ...r, [p]: { ok: false, message: "Une page de connexion s'est ouverte dans votre navigateur : autorisez l'accès, puis revenez ici…" } }));
+      try { const r = await api("ext.connect", extId, p, { clientId: cid, clientSecret: sec, callbackPort: port }); setRes((x) => ({ ...x, [p]: r })); if (r.needsClient) setAdv(true); if (r.ok) toast(`${p === "claude" ? "Claude Code" : "Codex"} : connecté à « ${name} ».`, "success"); } catch (e: any) { setRes((x) => ({ ...x, [p]: { ok: false, message: String(e.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, "") } })); } }
+    setBusy(""); setSec(""); void refresh(); };
+  const cmd = `codex mcp login -c 'mcp_servers.${name}.url="${url}"' ${name}`; const canva = /(^|\.)api\.canva\.com$/.test((() => { try { return new URL(url).host; } catch { return ""; } })());
+  const label = (p: "claude" | "codex") => (p === "claude" ? "Claude Code" : "Codex");
+  return <div className="mb-2"><button className="text-2xs text-accent hover:underline" onClick={() => setOpen(!open)}>{open ? "Masquer la connexion" : "Ce serveur demande une connexion en ligne (OAuth) ?"}</button>
+    {open && <div className="mt-1.5 rounded-xl border border-line p-3 space-y-2.5">
+      <p className="text-2xs text-muted">Un clic ouvre la page web d'autorisation du serveur, avec la connexion officielle de chaque agent. L'application ne voit jamais le jeton : Claude Code et Codex le gardent eux-mêmes.</p>
+      {canva && <p className="text-xs text-warning rounded-lg bg-[var(--warning-subtle)] px-2.5 py-2">Cette adresse (<span className="mono">api.canva.com/connect</span>) exige une application Canva préenregistrée. Pour un assistant IA, utilisez plutôt le serveur officiel <span className="mono select-text">https://mcp.canva.com/mcp</span> : il accepte la connexion automatique.</p>}
+      <div className="flex flex-wrap gap-2"><button className="btn btn-sm btn-primary" disabled={!!busy} onClick={() => void go(["claude", "codex"])}>{busy ? <><Loader2 size={13} className="animate-spin" />Connexion…</> : <><ExternalLink size={13} />Se connecter (Claude et Codex)</>}</button>
+        <button className="btn btn-sm" disabled={!!busy} onClick={() => void go(["claude"])}>Claude seul</button><button className="btn btn-sm" disabled={!!busy} onClick={() => void go(["codex"])}>Codex seul</button>
+        {busy && <button className="btn btn-sm btn-danger" onClick={() => void api("ext.connectCancel", extId, busy)}>Annuler</button>}</div>
+      <ul className="text-xs space-y-1">{(["claude", "codex"] as const).map((p) => { const r = res[p]; const s = p === "claude" ? st : null; return <li key={p} className="flex gap-2"><span className="w-24 shrink-0 text-fg2">{label(p)}</span><span className={r ? (r.ok ? "text-success" : busy === p ? "text-muted" : "text-danger") : s?.state === "connected" ? "text-success" : "text-muted"}>{r ? r.message : s ? (s.state === "connected" ? "Connecté" : s.state === "needs_auth" ? "Connexion requise" : s.state === "unknown" ? "Pas encore connecté" : s.detail ?? "Non connecté") : "État inconnu avant la première connexion"}</span></li>; })}</ul>
+      <button className="text-2xs text-accent hover:underline" onClick={() => setAdv(!adv)}>{adv ? "Masquer les options avancées" : "Le serveur refuse la connexion automatique ? Options avancées"}</button>
+      {adv && <div className="space-y-2 rounded-lg bg-bg p-2.5"><p className="text-2xs text-muted">Pour un serveur qui exige une application préenregistrée : identifiant client (et, si besoin, secret et port de retour) fournis par ce service. Le secret n'est jamais enregistré ni écrit sur la ligne de commande. Pris en charge pour Claude Code seulement.</p>
+        <div className="grid grid-cols-2 gap-2"><input className="input !h-8 !text-xs" aria-label="Identifiant client" placeholder="Identifiant client" value={cid} onChange={(e) => setCid(e.target.value)} /><input className="input !h-8 !text-xs" aria-label="Port de retour" placeholder="Port de retour (facultatif)" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} /></div>
+        <input className="input !h-8 !text-xs" type="password" aria-label="Secret client" placeholder="Secret client (facultatif)" autoComplete="off" value={sec} onChange={(e) => setSec(e.target.value)} /></div>}
+      <details className="text-2xs text-muted"><summary className="cursor-pointer">Commande équivalente (Codex)</summary><div className="flex items-center gap-1.5 mt-1"><code className="mono flex-1 break-all select-text">{cmd}</code><button className="btn btn-ghost btn-icon !h-7 !w-7" aria-label="Copier la commande" onClick={() => { void navigator.clipboard?.writeText(cmd).catch(() => {}); setOk(true); setTimeout(() => setOk(false), 1400); }}>{ok ? <Check size={13} /> : <Copy size={13} />}</button></div></details></div>}</div>;
 }
 export default function McpSkills() {
   const t = useT(); const [tab, setTab] = useState<"mine" | "mcp" | "skills">("mine"); const [q, setQ] = useState(""); const [prov, setProv] = useState(""); const [force, setForce] = useState(false);

@@ -104,6 +104,11 @@
       "category": "Development"
     },
     "electronVersion": "38.8.6",
-    "icon": "build/icon.png"
+    "icon": "build/icon.png",
+    "artifactName": "AI-Command-Center-Setup-${version}.${ext}",
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/hamza-bouda/ai-command-center/releases/latest/download"
+    }
   }
 }

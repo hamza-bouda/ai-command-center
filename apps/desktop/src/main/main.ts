@@ -12,7 +12,7 @@ const ARTIFACT_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, sep, resolve } from "node:path";
 import { createCore, connectMcp, cancelConnect, claudeStatus, type Core } from "@acc/core";
-import { autoUpdater } from "electron-updater";
+import { autoUpdater } from "electron-updater"; import { generateFile, kindOf, extOf, unsupportedReason, pdfHtml } from "./filegen";
 
 let core: Core; let win: BrowserWindow | null = null; let pickedRestore: string | null = null;
 const isDev = !!process.env.ACC_DEV;
@@ -78,6 +78,9 @@ function handlers(c: Core): Record<string, (...a: any[]) => unknown> {
     "analytics.roles": () => c.analytics.roles(),
     "conv.exportRich": (id: unknown, fmt: unknown, testPath?: unknown) => exportConversation(String(id), fmt === "pdf" ? "pdf" : "html", typeof testPath === "string" ? testPath : undefined),
     "image.save": async (ref: unknown) => { const p = imagePath(String(ref ?? "")); const r = await dialog.showSaveDialog(win!, { defaultPath: "image.png", filters: [{ name: "Image PNG", extensions: ["png"] }] }); if (r.canceled || !r.filePath) return null; (await import("node:fs")).copyFileSync(p, r.filePath); return r.filePath; },
+    "file.saveGenerated": async (name: unknown, content: unknown, testPath?: unknown) => { const nm = (String(name ?? "fichier.txt").split(/[\\/]/).pop() ?? "fichier.txt").replace(/[<>:"|?*]/g, "_").slice(0, 120) || "fichier.txt"; const body = String(content ?? ""); const why = unsupportedReason(nm); if (why) throw new Error(why); const ext = extOf(nm);
+      const r = process.env.ACC_E2E === "1" && typeof testPath === "string" ? { canceled: false, filePath: testPath } : await dialog.showSaveDialog(win!, { defaultPath: nm, filters: ext ? [{ name: ext.toUpperCase(), extensions: [ext] }, { name: "Tous les fichiers", extensions: ["*"] }] : undefined }); if (r.canceled || !r.filePath) return null;
+      const buf = kindOf(nm) === "pdf" ? await renderPdf(body, nm) : await generateFile(nm, body); (await import("node:fs")).writeFileSync(r.filePath, buf); return r.filePath; },
     "file.saveText": async (name: unknown, content: unknown) => { const r = await dialog.showSaveDialog(win!, { defaultPath: String(name ?? "fichier.txt") }); if (r.canceled || !r.filePath) return null; (await import("node:fs")).writeFileSync(r.filePath, String(content ?? ""), "utf8"); return r.filePath; },
     // Capture de l'écran où se trouve la fenêtre, après l'avoir masquée (sinon l'application se capturerait elle-même).
     "screen.capture": async () => {
@@ -198,6 +201,12 @@ async function exportConversation(id: string, fmt: "html" | "pdf", testPath?: st
     const html = `<!doctype html><html lang="fr" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"><title>${escHtml(d.title)}</title><style>${css}</style></head><body><div id="root">${inline(d.body)}</div></body></html>`;
     fs.writeFileSync(r.filePath, html, "utf8"); return r.filePath;
   } finally { if (!ew.isDestroyed()) ew.destroy(); }
+}
+/** PDF depuis du Markdown : rendu par une fenêtre cachée de l'application (sans script ni réseau), puis impression A4. */
+async function renderPdf(markdown: string, name: string): Promise<Buffer> {
+  const w = new BrowserWindow({ show: false, width: 900, height: 1200, webPreferences: { sandbox: true, javascript: false, webSecurity: true, backgroundThrottling: false } });
+  try { await w.loadURL("data:text/html;charset=utf-8;base64," + Buffer.from(pdfHtml(markdown, name.replace(/\.pdf$/i, ""))).toString("base64")); return await w.webContents.printToPDF({ printBackground: true, pageSize: "A4", margins: { marginType: "default" } }); }
+  finally { if (!w.isDestroyed()) w.destroy(); }
 }
 function hideQuick() { if (quick && !quick.isDestroyed()) quick.hide(); }
 async function toggleQuick() {

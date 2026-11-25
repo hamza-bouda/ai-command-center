@@ -22,7 +22,7 @@ const until = async (f: () => boolean) => { const t = Date.now(); while (!f()) {
 describe("Réponses enrichies : consigne donnée au modèle", () => {
   it("le prompt décrit les blocs et reste court (coût en tokens)", () => {
     for (const b of ["```quiz", "```choices", "```chart", "```mermaid", "```artifact", "```svg", "$$"]) expect(RICH_PROMPT).toContain(b);
-    expect(RICH_PROMPT).toMatch(/AskUserQuestion/); expect(RICH_PROMPT.length).toBeLessThan(1600); // ≈ 400 tokens maximum
+    expect(RICH_PROMPT).toMatch(/AskUserQuestion/); expect(RICH_PROMPT.length).toBeLessThan(2300); // ≈ 575 tokens maximum (les formats de fichiers à livrer en coûtent ≈ 130)
   });
   it("ajouté aux modes Chat, Work et Code par défaut ; retiré quand le réglage est désactivé", async () => {
     const { c, reqs, dir } = mk(); const project = c.projects.create({ name: "P", path: dir });

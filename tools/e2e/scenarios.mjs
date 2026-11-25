@@ -71,4 +71,29 @@ export const scenarios = {
     check("Ctrl+K ouvre la recherche depuis le terminal", await t.ev(`!!document.querySelector('[role=combobox], [role=dialog] input')`));
     await t.api("terminal.kill", info.id).catch(() => {});
   },
+
+  /** Accessibilité automatique (axe-core, WCAG 2 A et AA) : aucune violation sérieuse ou critique sur les pages principales, thèmes sombre et clair. Ne remplace pas un test avec un lecteur d'écran. */
+  async accessibilite(t, check) {
+    const { readFileSync } = await import("node:fs"); const { createRequire } = await import("node:module"); const src = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
+    const bad = [];
+    for (const theme of ["dark", "light"]) for (const r of ["/", "/chat?new=1", "/settings", "/knowledge", "/mcp", "/workflows", "/orchestrator", "/library", "/studio?new=1", "/analytics"]) {
+      await t.go(r); await t.ev(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`); await t.sleep(400); if (!(await t.ev("!!window.axe"))) await t.ev(src);
+      const res = JSON.parse(await t.ev(`axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}).then(r=>JSON.stringify(r.violations.filter(v=>v.impact==='serious'||v.impact==='critical').map(v=>v.id+' ('+v.nodes.length+')')))`));
+      if (res.length) bad.push(`${theme}${r}: ${res.join(", ")}`);
+    }
+    await t.ev("document.documentElement.dataset.theme='dark'");
+    check("aucune violation WCAG A/AA sérieuse ou critique (10 pages x 2 thèmes)", bad.length === 0, bad.slice(0, 3).join(" | "));
+  },
+
+  async inserer_un_workflow(t, check) {
+    await t.go("/studio?new=1"); await t.waitFor(`[...document.querySelectorAll("button")].some(b=>b.innerText.includes("Canevas vide"))`, 8000); await t.clickText("Canevas vide"); await t.sleep(800);
+    check("canevas vide", (await t.ev(`document.querySelectorAll('${STEP}').length`)) === 0);
+    check("workflows proposés à l'insertion", await t.waitFor(`[...document.querySelectorAll('aside button')].some(b=>(b.getAttribute('aria-label')||'').startsWith('Insérer le workflow'))`, 6000));
+    await t.ev(`[...document.querySelectorAll('aside button')].find(b=>(b.getAttribute('aria-label')||'').includes('Feature Development')).click()`); await t.sleep(1200);
+    const n = await t.ev(`document.querySelectorAll('${STEP}').length`); check("les étapes du modèle sont insérées", n === 5, String(n));
+    const e = await realEdgeCount(t); check("les liens internes sont conservés", e === 4, String(e));
+    await t.ev(`[...document.querySelectorAll('aside button')].find(b=>(b.getAttribute('aria-label')||'').includes('Bug Fix'))?.click()`); await t.sleep(1000);
+    const m = await t.ev(`document.querySelectorAll('${STEP}').length`); check("une seconde insertion ajoute un groupe sans collision de clés", m > n, String(m));
+  },
 };
+const realEdgeCount = (t) => t.ev(`[...document.querySelectorAll('.react-flow__edge')].filter(e=>!(e.getAttribute('data-testid')||'').startsWith('rf__edge-v-')).length`);

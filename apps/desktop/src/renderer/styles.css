@@ -119,7 +119,7 @@ h1, .font-display { font-family: "Source Serif 4 Variable", "Iowan Old Style", G
   --text-primary: #1f1e1d; --text-secondary: #46443f; --text-muted: #66645d;
   --accent: #a64a27; --accent-hover: #8d3f20; --accent-subtle: rgba(166, 74, 39, 0.11); --accent-fg: #ffffff;
   --btn-primary: #b4532f; --btn-primary-hover: #9a4526; --btn-primary-fg: #ffffff;
-  --success: #047857; --warning: #a35a06; --danger: #be123c; --info: #1d4ed8;
+  --success: #047857; --warning: #8f4f05; --danger: #be123c; --info: #1d4ed8;
   --success-subtle: rgba(4, 120, 87, .11); --warning-subtle: rgba(163, 90, 6, .12); --danger-subtle: rgba(190, 18, 60, .10); --info-subtle: rgba(29, 78, 216, .10);
   --claude: #c2410c; --codex: #0369a1;
   --shadow-pop: 0 12px 36px rgba(60, 50, 30, .18), 0 0 0 1px var(--border);
